@@ -1,0 +1,92 @@
+---
+description: Reusable skills and step-by-step task instructions for common development operations
+globs: ["app/**/*.py", "tests/**/*.py"]
+alwaysApply: false
+---
+
+# Skills — Step-by-Step Task Instructions
+
+## Create a New API Endpoint
+
+1. Define Pydantic request/response schemas in `app/api/schemas/<module>.py`
+2. Create the router function in `app/api/v1/<module>.py`
+3. Add `response_model` and `status_code` to the decorator
+4. Inject dependencies (`db`, `current_user`) via function parameters
+5. Call the appropriate service method — never put business logic in routers
+6. Register the router in `app/api/v1/router.py` if it's a new module
+7. Write tests in `tests/test_api/test_<module>.py`
+
+## Create a New AI Evaluator
+
+1. Define the output Pydantic schema in `app/schemas/evaluators.py`
+   - Use `Field(description=...)` for every field
+   - Use `Literal` for enum-like fields
+   - Always include: summary, critical_issues, strengths
+2. Create the prompt file in `app/ai/prompts/evaluators/<name>.py`
+   - Export: `VERSION`, `SYSTEM_PROMPT`, `OUTPUT_SCHEMA`
+3. Create the evaluator function in `app/ai/evaluators/<name>.py`
+   - Signature: `async def run_<name>_evaluator(resume_data, context) -> <Schema>`
+   - Load prompt from prompts module
+   - Call AI via `app.ai.provider.call_ai()`
+   - Validate output with Pydantic
+4. Register in `app/ai/orchestrator.py` for relevant analysis modes
+5. Write tests in `tests/test_ai/evaluators/test_<name>.py`
+
+## Create a New Prompt
+
+1. Create file in `app/ai/prompts/<category>/<name>.py`
+2. Export: `VERSION`, `SYSTEM_PROMPT`, `USER_PROMPT_TEMPLATE`
+3. System prompt should include: role definition, output format, constraints, examples
+4. User prompt template should use `.format()` placeholders
+5. Keep system prompts under 2000 words
+6. Use delimiters for user-provided data to prevent injection
+
+## Add a New Analysis Mode
+
+1. Add mode to `AnalysisType` enum in `app/schemas/analyses.py`
+2. Create mode config in `app/ai/prompts/modes/<mode>.py`
+3. Update orchestrator (`app/ai/orchestrator.py`) to route evaluators
+4. Update scoring engine (`app/ai/scoring.py`) with mode-specific weights
+5. Add API request validation in `app/api/schemas/analyses.py`
+6. Write integration tests
+
+## Add a New Database Model
+
+1. Create model in `app/models/<name>.py`
+   - Inherit from `app.models.base.Base`
+   - UUID primary key, created_at, updated_at timestamps
+   - Define relationships with `back_populates`
+2. Run: `poetry run alembic revision --autogenerate -m "add <name> table"`
+3. Review and test the generated migration
+4. Add Pydantic schema with `model_config = {"from_attributes": True}`
+5. Add repository/service methods in `app/services/<name>.py`
+
+## Debug AI Pipeline Issues
+
+1. Check analysis record `status` — what step failed?
+2. Check `prompt_versions_used` — correct prompts loaded?
+3. Check `analysis_usage` for token counts — did the call complete?
+4. Log: composed prompt, raw AI response, Pydantic validation result
+5. Common fixes:
+   - Invalid JSON → check response_format compatibility
+   - Incomplete output → increase max_tokens
+   - Wrong structure → add examples to prompt
+   - Rate limiting → check retry config
+
+## Write Tests for AI Evaluators
+
+1. Create test file in `tests/test_ai/evaluators/test_<name>.py`
+2. Use `@pytest.mark.asyncio` for async tests
+3. Mock `app.ai.provider.call_ai()` with a fixture returning predefined Pydantic objects
+4. Test: valid input → valid output structure
+5. Test: AI returns invalid JSON → graceful handling
+6. Test: AI returns incomplete data → defaults or error
+7. Use sample resume data fixture from `conftest.py`
+
+## Add a New Role Context
+
+1. Create `app/ai/prompts/roles/<role_name>.py`
+2. Export: `ROLE_KEY`, `ROLE_DISPLAY_NAME`, `ROLE_CONTEXT_PROMPT`
+3. Context should include: expected skills, project types, tech stack, red flags
+4. Register in role registry (`app/ai/prompts/roles/__init__.py`)
+5. Add to role enum in `app/api/schemas/analyses.py`

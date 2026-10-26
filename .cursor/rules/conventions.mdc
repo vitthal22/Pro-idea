@@ -1,0 +1,86 @@
+---
+description: Coding conventions, naming, and style rules for AI Resume Brutal Roaster
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# Coding Conventions
+
+## Style
+
+- Use Ruff as the formatter and linter (replaces Black + isort + flake8)
+- 4 spaces indent, no tabs
+- 88 character line length
+- Double quotes for strings
+- Trailing commas on multi-line structures
+
+## Naming
+
+```
+Variables/Functions  → snake_case          (e.g., resume_data, parse_resume)
+Classes              → PascalCase          (e.g., ResumeParser, RecruiterEvaluator)
+Constants            → UPPER_SNAKE_CASE    (e.g., MAX_FILE_SIZE, JWT_ALGORITHM)
+Private methods      → _leading_underscore (e.g., _validate_input)
+Files/Modules        → snake_case          (e.g., resume.py, content_quality.py)
+API URLs             → kebab-case          (e.g., /api/v1/analyses/:id/status)
+Database columns     → snake_case          (e.g., created_at, user_id)
+JSON fields          → snake_case          (e.g., analysis_type, target_role)
+```
+
+## Type Hints
+
+**Required everywhere.** Use `X | None` instead of `Optional[X]`.
+
+```python
+# ✅ Correct
+async def get_resume(resume_id: UUID, db: AsyncSession) -> Resume | None:
+    ...
+
+# ❌ Wrong
+async def get_resume(resume_id, db):
+    ...
+```
+
+## Import Ordering
+
+1. Standard library
+2. Third-party packages
+3. Local application (app.*)
+
+Ruff handles this automatically.
+
+## Pydantic Rules
+
+- Always use `Field(description=...)` for AI schemas
+- Always use `Literal` for enum fields in AI outputs (not custom Enum classes)
+- Use `list[X]` syntax (not `List[X]`)
+- API schemas: `model_config = {"from_attributes": True}` for ORM mode
+- AI schemas go in `app/schemas/`, API schemas go in `app/api/schemas/`
+
+## FastAPI Rules
+
+- Always specify `response_model` on endpoints
+- Always use `status_code=201` for creation endpoints
+- Use `Depends()` for all injected dependencies
+- Return Pydantic models, not dicts
+
+## Error Handling
+
+- Use `HTTPException` for API errors
+- Use custom exceptions from `app/common/exceptions.py` for business logic
+- Never catch `Exception` broadly
+- Never let raw tracebacks reach the API response
+
+## Testing
+
+- Use pytest with pytest-asyncio
+- Use httpx.AsyncClient for API tests
+- Mock AI calls in unit tests
+- Test file names: `test_<module>.py`
+- Test function names: `test_<what_is_being_tested>`
+
+## Git
+
+- Branch: `feature/<name>`, `fix/<name>`, `refactor/<name>`
+- Commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
+- Never commit .env, uploads/, or __pycache__/

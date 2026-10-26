@@ -1,0 +1,16 @@
+{
+  "name": "resume-roaster-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend scripts. Uses the project-local .venv (works like node_modules).",
+  "scripts": {
+    "dev": ".venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
+    "start": ".venv\\Scripts\\python.exe -m uvicorn app.main:app",
+    "lint": ".venv\\Scripts\\python.exe -m ruff check . && .venv\\Scripts\\python.exe -m ruff format --check .",
+    "lint:fix": ".venv\\Scripts\\python.exe -m ruff check --fix . && .venv\\Scripts\\python.exe -m ruff format .",
+    "typecheck": ".venv\\Scripts\\python.exe -m mypy app/",
+    "check": "npm run lint && npm run typecheck",
+    "db:migrate": ".venv\\Scripts\\python.exe -m alembic upgrade head",
+    "test": ".venv\\Scripts\\python.exe -m pytest"
+  }
+}

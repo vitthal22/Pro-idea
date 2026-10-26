@@ -1,0 +1,57 @@
+---
+description: Architecture rules and system design constraints for AI Resume Brutal Roaster
+globs: ["app/**/*.py"]
+alwaysApply: false
+---
+
+# Architecture Rules
+
+## Module Boundaries (STRICT)
+
+```
+Router (api/)        → HTTP concerns ONLY: request parsing, response formatting, status codes
+                       NEVER put business logic here
+
+Service (services/)  → Business logic: orchestration, validation rules, data transformation
+                       NEVER put HTTP concerns here
+
+Model (models/)      → Database schema ONLY: SQLAlchemy table definitions, relationships
+                       NEVER put business logic here
+
+Schema (schemas/)    → Data contracts: Pydantic models for API, AI outputs, domain objects
+                       NEVER put database or HTTP logic here
+
+AI (ai/)             → AI-specific code: providers, evaluators, prompts, scoring
+                       NEVER put HTTP or database logic here
+```
+
+## Dependency Injection
+
+- Database sessions come from `app/api/deps.py` via `Depends(get_db)`
+- Authentication comes from `app/api/deps.py` via `Depends(get_current_user)`
+- Never instantiate services inside routers — inject them
+- Never create database connections manually
+
+## Data Flow Rules
+
+1. Router receives request → validates with Pydantic → calls Service
+2. Service contains business logic → calls AI layer or database as needed
+3. AI layer uses provider abstraction → returns structured Pydantic objects
+4. Service returns result → Router formats response
+
+## AI Pipeline Rules
+
+- NEVER call litellm/openai directly — always use `app.ai.provider.call_ai()`
+- NEVER hardcode prompts — always load from `app/ai/prompts/`
+- Every AI output MUST be validated with Pydantic before use
+- If AI output validation fails → log warning → retry or degrade gracefully
+- Evaluators are functions, not classes (unless stateful)
+
+## Database Rules
+
+- All primary keys are UUIDs
+- All tables have created_at and updated_at
+- Use JSONB for flexible/varying structures (AI outputs)
+- Use relationships with back_populates, never backref
+- Never use lazy loading in async — always selectin or joinedload
+- Always create Alembic migrations for schema changes
