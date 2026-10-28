@@ -47,23 +47,23 @@
 - [x] Initialize Alembic: created `alembic/` + `alembic.ini` by hand (not `alembic init`)
 - [x] Configure `alembic.ini` + `alembic/env.py` for async PostgreSQL
 - [x] Create first migration — revision `0001` creates `users` (not an empty baseline)
-- [~] Verify: `upgrade head` verified; `downgrade -1` roundtrip not exercised yet
+- [x] Verify: `upgrade head` + `downgrade -1` roundtrip verified; `alembic check` reports no model/DB drift
 
 
 
 ### M1.4 — Database Models
 
 - [x] `app/models/user.py` — User (id, email, name, password_hash, tier, timestamps)
-- [ ] `app/models/resume.py` — Resume (id, user_id FK, file_path, original_name, file_size, mime_type, raw_text, structured_data JSONB, parsing_status, parsing_errors JSONB, timestamps)
-- [ ] `app/models/analysis.py` — Analysis (id, user_id FK, resume_id FK, analysis_type, target_role, job_description, custom_instructions, status, error_message, prompt_versions_used JSONB, ai_model_used, processing_time_ms, timestamps)
-- [ ] `app/models/analysis.py` — AnalysisResult (id, analysis_id UNIQUE FK, all feedback JSONB columns, scores, final_roast, final_report JSONB, timestamps)
-- [ ] `app/models/prompt_version.py` — PromptVersion (id, prompt_key, version, content, schema_hash)
-- [ ] `app/models/analysis_usage.py` — AnalysisUsage (id, user_id FK, analysis_id FK, ai_model, tokens, cost_usd)
-- [ ] Add relationships to User model (resumes list, analyses list)
-- [ ] Add relationships to Resume model (user, analyses list)
-- [ ] Add relationships to Analysis model (user, resume, result)
-- [~] Generate migration: revision `0001` covers `users` only; the rest arrive with their models
-- [~] Verify migration applies (verified) and rolls back (not exercised yet)
+- [x] `app/models/resume.py` — Resume (id, user_id FK, file_path, original_name, file_size, mime_type, raw_text, structured_data JSONB, parsing_status, parsing_errors JSONB, timestamps, deleted_at)
+- [x] `app/models/analysis.py` — Analysis (id, user_id FK, resume_id FK, analysis_type, target_role, job_description, custom_instructions, status, error_message, prompt_versions_used JSONB, ai_model_used, processing_time_ms, timestamps)
+- [x] `app/models/analysis.py` — AnalysisResult (id, analysis_id UNIQUE FK, all feedback JSONB columns, scores, final_roast, final_report JSONB, timestamps)
+- [ ] `app/models/prompt_version.py` — PromptVersion — **intentionally skipped**: ARCHITECTURE.md keeps prompt versions as file constants for the MVP (table is V2)
+- [x] `app/models/analysis_usage.py` — AnalysisUsage (id, user_id FK, analysis_id FK, ai_model, prompt_tokens, completion_tokens, cost_usd)
+- [x] Add relationships to User model (resumes, analyses) — `lazy="raise"`, load explicitly with `selectinload`
+- [x] Add relationships to Resume model (user, analyses)
+- [x] Add relationships to Analysis model (user, resume, result)
+- [x] Generate migration: revision `0002` creates `resumes`, `analyses`, `analysis_results`, `analysis_usage`
+- [x] Verify migration applies and rolls back cleanly — both verified, plus `alembic check`
 
 
 
@@ -83,11 +83,11 @@
 
 ### M1.6 — Middleware
 
-- [ ] `app/common/middleware.py` — Rate limiting with `slowapi` (3/day free, 50/day pro)
+- [~] `app/common/middleware.py` — Rate limiting with `slowapi` (3/day free, 50/day pro) — **login brute-force throttle done** as a service seam (`LoginThrottle`, 429 after `LOGIN_RATE_LIMIT_PER_HOUR` failures per email+client); per-tier slowapi limits still pending
 - [x] Add `CORSMiddleware` to `app/main.py`
 - [ ] Add request logging middleware
 - [x] Add global exception handler for `AppException` → structured JSON error response
-- [~] Verify: CORS configured (headers not explicitly asserted); no 429 yet — rate limiting not implemented
+- [~] Verify: 429 asserted for login throttling (`tests/test_api/test_auth_throttle.py`); per-tier slowapi limits and CORS header assertions still missing
 
 
 
@@ -115,37 +115,37 @@
 
 ### M2.1 — File Storage
 
-- [ ] `app/storage/base_storage.py` — Abstract base: `save()`, `delete()`, `get_path()`
-- [ ] `app/storage/local_storage.py` — Local filesystem: `uploads/{user_id}/{uuid}.{ext}`
-- [ ] `app/api/deps.py` — Add `get_storage()` dependency (returns `LocalStorage` instance)
-- [ ] Verify: save a file, get back path, file exists on disk
+- [x] `app/storage/base.py` — `Storage` protocol: `save()`, `delete()`, `get_path()`
+- [x] `app/storage/local_storage.py` — Local filesystem: `UPLOAD_DIR/{user_id}/{uuid}.{ext}`, traversal-guarded
+- [x] `app/api/deps.py` — Add `get_storage()` dependency (returns `LocalStorage` instance)
+- [x] Verify: save a file, get back path, file exists on disk — covered by `tests/test_services/test_storage.py`
 
 
 
 ### M2.2 — PDF Extraction
 
-- [ ] `app/document_processing/pdf.py` — `extract_pdf(file_path) -> str`
+- [x] `app/document_processing/pdf.py` — `extract_pdf(file_path) -> str`
   - Use `pdfplumber` to extract text
   - Handle multi-page documents
   - Handle tables (best-effort text extraction)
   - Return cleaned text string
-- [ ] Test with sample PDF: valid text extraction
+- [x] Test with sample PDF: valid text extraction — generated in-memory PDF fixture
 
 
 
 ### M2.3 — DOCX Extraction
 
-- [ ] `app/document_processing/docx.py` — `extract_docx(file_path) -> str`
+- [x] `app/document_processing/docx.py` — `extract_docx(file_path) -> str`
   - Use `python-docx` to extract paragraphs + tables
   - Preserve section ordering
   - Return cleaned text string
-- [ ] Test with sample DOCX: valid text extraction
+- [x] Test with sample DOCX: valid text extraction — paragraphs + tables in document order
 
 
 
 ### M2.4 — OCR Fallback
 
-- [ ] `app/document_processing/ocr.py` — `extract_ocr(file_path) -> str`
+- [ ] `app/document_processing/ocr.py` — `extract_ocr(file_path) -> str` — **V2**: pytesseract/pdf2image are V2 deps; low-quality text currently raises a clean 422
   - Use `pytesseract` + `pdf2image` (for PDF → images → text)
   - Handle image-based PDFs
   - Return cleaned text string
@@ -156,47 +156,47 @@
 
 ### M2.5 — Text Quality Check
 
-- [ ] `app/document_processing/quality.py` — `validate_text(text) -> TextQualityResult`
+- [x] `app/document_processing/quality.py` — `validate_text(text) -> TextQuality`
   - Check: > 100 words? printable char ratio > 60%? not garbled?
   - Return: `{ is_valid, word_count, printable_ratio, confidence }`
-- [ ] Test: valid text, empty text, garbled text, short text
+- [x] Test: valid text, empty text, garbled text, short text
 
 
 
 ### M2.6 — Extractor Router
 
-- [ ] `app/document_processing/extractor.py` — Main entry point: `extract_text(file_path, mime_type) -> ExtractedText`
+- [~] `app/document_processing/extractor.py` — Main entry point: `extract_text(file_path, mime_type) -> ExtractedText` (OCR fallback deferred to V2)
   - Route: `application/pdf` → pdfplumber
   - Route: `application/vnd.openxmlformats-officedocument.wordprocessingml.document` → python-docx
   - After extraction, run quality check
   - If quality low (empty/garbled) → fallback to OCR
   - If OCR also fails → raise `ResumeParsingError`
   - Return: `{ raw_text, extraction_method, quality }`
-- [ ] Test: PDF works, DOCX works, OCR fallback triggers, garbage input fails cleanly
+- [~] Test: PDF works, DOCX works, garbage input fails cleanly (OCR fallback untested — V2)
 
 
 
 ### M2.7 — Resume Service
 
-- [ ] `app/services/resume.py` — `upload_resume()`, `get_resume()`, `list_resumes()`, `delete_resume()`
+- [x] `app/services/resume.py` — `upload()`, `get()`, `list()`, `delete()` on `ResumeService`
   - Upload: validate MIME (python-magic), validate size (10MB), save file, create DB record, extract text, update record
   - Get: fetch by ID, ensure user owns it
   - List: fetch all for user, ordered by created_at desc
   - Delete: remove file + DB record
-- [ ] Test: upload PDF → DB record created, `raw_text` populated
+- [x] Test: upload PDF → DB record created, `raw_text` populated
 
 
 
 ### M2.8 — Resume API Endpoints
 
-- [ ] `app/api/schemas/resumes.py` — `ResumeUploadResponse`, `ResumeResponse`, `ResumeListResponse`
-- [ ] `app/api/v1/resumes.py` — Router:
+- [x] `app/api/schemas/resumes.py` — `ResumeResponse`, `ResumeDetailResponse`, `ResumeListResponse`
+- [x] `app/api/v1/resumes.py` — Router:
   - `POST /upload` (201) — multipart upload
   - `GET /` — list user's resumes
   - `GET /{resume_id}` — get resume details
   - `DELETE /{resume_id}` — delete resume
-- [ ] Include in `app/api/v1/router.py`
-- [ ] Test: upload file via API → 201, list shows it, get returns details, delete removes it
+- [x] Include in `app/api/v1/router.py`
+- [x] Test: upload file via API → 201, list shows it, get returns details, delete removes it
 
 ---
 

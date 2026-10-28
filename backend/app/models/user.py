@@ -5,13 +5,18 @@ The repository maps rows to the domain ``User`` dataclass.
 """
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.analysis import AnalysisModel
+    from app.models.resume import ResumeModel
 
 
 class UserModel(Base):
@@ -50,4 +55,15 @@ class UserModel(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
         server_default=func.now(),
+    )
+
+    resumes: Mapped[list["ResumeModel"]] = relationship(
+        back_populates="user",
+        lazy="raise",
+        cascade="all, delete-orphan",
+    )
+    analyses: Mapped[list["AnalysisModel"]] = relationship(
+        back_populates="user",
+        lazy="raise",
+        cascade="all, delete-orphan",
     )

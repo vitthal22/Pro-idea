@@ -39,11 +39,31 @@ async function parseErrorResponse(response: Response): Promise<ApiClientError> {
   let message = `Request failed with status ${response.status}`;
   let details: Record<string, unknown> | undefined;
   try {
-    const body = (await response.json()) as ApiErrorBody;
+    const body = (await response.json()) as {
+      error?: Partial<ApiErrorBody["error"]>;
+      detail?: unknown;
+    };
     if (body?.error) {
       code = body.error.code ?? code;
       message = body.error.message ?? message;
       details = body.error.details;
+    } else if (typeof body?.detail === "string") {
+      // FastAPI HTTPException shape: { detail: "..." }
+      message = body.detail;
+    } else if (Array.isArray(body?.detail)) {
+      // FastAPI RequestValidationError: { detail: [{ loc, msg, type }, ...] }
+      const problems = body.detail
+        .filter(
+          (item): item is { msg: string } =>
+            typeof item === "object" &&
+            item !== null &&
+            typeof (item as { msg?: unknown }).msg === "string",
+        )
+        .map((item) => item.msg);
+      if (problems.length > 0) {
+        code = "VALIDATION_ERROR";
+        message = problems.join("; ");
+      }
     }
   } catch {
     // Non-JSON error body — keep defaults
@@ -73,7 +93,10 @@ export async function apiFetch<T>(
 
   const execute = (authToken: string | null): Promise<Response> => {
     const headers: Record<string, string> = { ...options.headers };
-    if (options.body && !headers["Content-Type"]) {
+    // FormData must keep its auto-generated multipart boundary — forcing
+    // application/json here makes the backend fail to parse the body (422).
+    const isFormData = options.body instanceof FormData;
+    if (options.body && !isFormData && !headers["Content-Type"]) {
       headers["Content-Type"] = "application/json";
     }
     if (authToken) {

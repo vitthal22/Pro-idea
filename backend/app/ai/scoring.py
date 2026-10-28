@@ -1,6 +1,5 @@
 """Analysis mode configurations - defines which evaluators run for each mode."""
 
-
 from typing import Any
 
 MODE_WEIGHTS: dict[str, dict[str, Any]] = {

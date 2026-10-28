@@ -4,7 +4,7 @@ Routers are HTTP-only: parse request, call service, shape response.
 Cookies are set/cleared here (HTTP concern), never in the service layer.
 """
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.deps import (
     clear_refresh_cookie,
@@ -41,14 +41,24 @@ async def register(
     return session.tokens
 
 
+def _throttle_key(request: Request, email: str) -> str:
+    """Failed-login counter key: the account plus the calling client."""
+    host = request.client.host if request.client else "unknown"
+    return f"{email.strip().lower()}|{host}"
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
     """Verify credentials and return the access token (refresh cookie set)."""
-    session = await auth_service.login(payload)
+    session = await auth_service.login(
+        payload,
+        client_key=_throttle_key(request, payload.email),
+    )
     set_refresh_cookie(response, session.refresh_token)
     return session.tokens
 

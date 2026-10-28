@@ -8,3 +8,9 @@ export interface ResumeResponse {
   parsing_status: string;
   created_at: string;
 }
+
+/** TypeScript mirror of backend ResumeListResponse. */
+export interface ResumeListResponse {
+  items: ResumeResponse[];
+  total: number;
+}

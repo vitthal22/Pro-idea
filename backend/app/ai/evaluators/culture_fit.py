@@ -1,10 +1,11 @@
-"""Culture Fit evaluator for resume analysis."""
+"""Culture Fit evaluator — recruiter-lens evaluation of the resume."""
 
 from typing import Any
 
-from app.ai.provider import call_ai
-
 from app.ai.prompts.evaluators.culture_fit import SYSTEM_PROMPT
+from app.ai.provider import call_ai
+from app.common.exceptions import AIEvaluationError
+from app.schemas.evaluators import RecruiterEvaluatorOutput
 
 
 async def run_culture_fit_evaluator(
@@ -14,33 +15,40 @@ async def run_culture_fit_evaluator(
     """Run the culture fit evaluator on resume data.
 
     Args:
-        resume_data: Parsed resume information
-        context: Additional context (e.g., company values, team profile)
+        resume_data: Parsed resume information.
+        context: Additional context (e.g. company values, team profile).
 
     Returns:
-        dict with evaluator output
+        dict with the evaluator output.
+
+    Raises:
+        AIEvaluationError: If the AI call fails or the output does not
+            validate against the evaluator schema.
     """
-    user_prompt = f"""Evaluate this resume for culture fit:
+    user_prompt = (
+        "Evaluate this resume for culture fit:\n\n"
+        f"RESUME DATA:\n{resume_data}\n\n"
+        "Provide an evaluation focused on culture fit alignment."
+    )
 
-    RESUME DATA:
-    {resume_data}
-
-    Provide evaluation focused on culture fit alignment."""
-    
-    raw_response = await call_ai(
+    result = await call_ai(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
+        response_model=RecruiterEvaluatorOutput,
     )
-    
-    result = {
-        "summary": raw_response.get("summary", "Culture fit evaluation completed"),
-        "critical_issues": raw_response.get("critical_issues", []),
-        "strengths": raw_response.get("strengths", []),
-        "overall_score": raw_response.get("overall_score", 50),
-        "hiring_likelihood": raw_response.get("hiring_likelihood", "Medium"),
-        "resume_format_assessment": raw_response.get(
-            "resume_format_assessment", "Acceptable"
-        ),
+
+    evaluation = result.data
+    if not isinstance(evaluation, RecruiterEvaluatorOutput):
+        raise AIEvaluationError(
+            evaluator="culture_fit",
+            reason="model returned no structured evaluation",
+        )
+
+    return {
+        "summary": evaluation.summary,
+        "critical_issues": evaluation.critical_issues,
+        "strengths": evaluation.strengths,
+        "overall_score": evaluation.overall_score,
+        "hiring_likelihood": evaluation.hiring_likelihood,
+        "resume_format_assessment": evaluation.resume_format_assessment,
     }
-    
-    return result

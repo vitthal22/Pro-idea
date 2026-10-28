@@ -33,8 +33,13 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     ai_model: str = "gpt-4o"
     ai_fast_model: str = "gpt-4o-mini"
+    ai_timeout: float = 60.0  # seconds per AI call
+    ai_max_retries: int = 2  # attempts per call before giving up
+    ai_fallback_enabled: bool = True  # try AI_FAST_MODEL when the primary fails
+    ai_max_tokens: int = 2048  # output cap on every AI call
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+    gemini_api_key: str | None = None
 
     # Auth
     jwt_secret_key: str = "change-this-to-a-random-string-at-least-32-chars"
