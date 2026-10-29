@@ -15,7 +15,7 @@ export type AnalysisStatus =
   | "failed";
 
 /** Stages the pipeline walks through before a terminal state. */
-export const RUNNING_STATUSES: ReadonlySet<AnalysisStatus> = new Set([
+const RUNNING_STATUSES: ReadonlySet<AnalysisStatus> = new Set([
   "queued",
   "extracting",
   "parsing",
@@ -122,12 +122,6 @@ export interface AnalysisDetail {
   processing_time_ms: number | null;
   score_verdict: ScoreVerdict | null;
   result: AnalysisResultPayload | null;
-}
-
-export interface AnalysisStatusResponse {
-  id: string;
-  status: AnalysisStatus;
-  error_message: string | null;
 }
 
 export interface AnalysisListItem {

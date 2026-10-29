@@ -18,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useAnalyses } from "@/hooks/queries/use-analyses";
 import { useResumes } from "@/hooks/queries/use-resumes";
+import { analysisModeLabel } from "@/lib/analysis-modes";
+import { formatShortDate } from "@/lib/format";
 import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
 const trendConfig = {
@@ -36,20 +38,13 @@ const BUCKETS = [
   { label: "90-100", min: 90, max: 100 },
 ];
 
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function buildChartData(items: AnalysisListItem[]) {
   // API returns newest first — the trend reads oldest → newest.
   const scored = items
     .filter((item) => item.overall_score !== null)
     .reverse();
   const trend = scored.map((item) => ({
-    date: shortDate(item.created_at),
+    date: formatShortDate(item.created_at),
     score: Math.round(item.overall_score as number),
   }));
   const scores = scored.map((item) => item.overall_score as number);
@@ -79,19 +74,19 @@ function ActivityFeed({ items }: { items: AnalysisListItem[] }) {
             )}
             <span className="min-w-0 flex-1 truncate">
               {running ? (
-                <span>{item.analysis_type.replace("_", " ")} analysis</span>
+                <span>{analysisModeLabel(item.analysis_type)} analysis</span>
               ) : (
                 <Link
                   href={`/analysis/${item.id}`}
                   className="hover:text-primary hover:underline"
                 >
-                  {item.analysis_type.replace("_", " ")} analysis
+                  {analysisModeLabel(item.analysis_type)} analysis
                 </Link>
               )}
             </span>
             {item.status !== "completed" && <StatusBadge status={item.status} />}
             <span className="shrink-0 text-xs text-muted-foreground">
-              {shortDate(item.created_at)}
+              {formatShortDate(item.created_at)}
             </span>
           </li>
         );

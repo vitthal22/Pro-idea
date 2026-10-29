@@ -11,24 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  isRunningStatus,
-  type AnalysisListItem,
-} from "@/types/analysis";
-
-const MODE_LABELS: Record<AnalysisListItem["analysis_type"], string> = {
-  general: "General",
-  role_based: "Role-based",
-  jd_based: "JD-based",
-  custom: "Custom",
-};
+import { formatDate } from "@/lib/format";
+import { analysisModeLabel } from "@/lib/analysis-modes";
+import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
 export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
-  const created = new Date(analysis.created_at).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const created = formatDate(analysis.created_at);
   const running = isRunningStatus(analysis.status);
 
   return (
@@ -47,7 +35,7 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
               )}
               <div className="min-w-0 flex-1">
                 <CardTitle className="text-base">
-                  {MODE_LABELS[analysis.analysis_type]} analysis
+                  {analysisModeLabel(analysis.analysis_type)} analysis
                 </CardTitle>
                 <CardDescription>
                   {running ? "Roasting now — tap to watch live" : `Created ${created}`}

@@ -4,8 +4,6 @@ The DSN comes from ``Settings.database_dsn`` — nothing is hardcoded, so the
 same code runs against local, dev, and prod databases.
 """
 
-from collections.abc import AsyncIterator
-
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -48,12 +46,6 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
             expire_on_commit=False,
         )
     return _session_factory
-
-
-async def session_scope() -> AsyncIterator[AsyncSession]:
-    """Yield a session outside the request lifecycle (startup, scripts)."""
-    async with get_session_factory()() as session:
-        yield session
 
 
 async def dispose_engine() -> None:

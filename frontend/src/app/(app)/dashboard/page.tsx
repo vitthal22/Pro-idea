@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalyses } from "@/hooks/queries/use-analyses";
 import { useResumes } from "@/hooks/queries/use-resumes";
+import { analysisModeLabel } from "@/lib/analysis-modes";
 import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
 const stagger: Variants = {
@@ -25,13 +26,6 @@ const stagger: Variants = {
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
-};
-
-const MODE_LABELS: Record<AnalysisListItem["analysis_type"], string> = {
-  general: "General",
-  role_based: "Role-based",
-  jd_based: "JD-based",
-  custom: "Custom",
 };
 
 function LatestRoastCard({ roast }: { roast: AnalysisListItem }) {
@@ -46,7 +40,7 @@ function LatestRoastCard({ roast }: { roast: AnalysisListItem }) {
         <div>
           <p className="text-sm text-muted-foreground">Latest roast</p>
           <p className="mt-0.5 font-semibold">
-            {MODE_LABELS[roast.analysis_type]} analysis
+            {analysisModeLabel(roast.analysis_type)} analysis
           </p>
           <span className="mt-2 inline-block">
             <StatusBadge status={roast.status} />

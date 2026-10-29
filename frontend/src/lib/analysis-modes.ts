@@ -1,5 +1,7 @@
 /** Analysis modes and the role catalog shared by the upload flow. */
 
+import type { AnalysisType } from "@/types/analysis";
+
 export const ANALYSIS_MODES = [
   {
     value: "general",
@@ -38,3 +40,15 @@ export const ROLE_OPTIONS = [
 
 export const JD_MAX_CHARS = 5000;
 export const CUSTOM_INSTRUCTIONS_MAX_CHARS = 500;
+
+/** The human mode label shown on cards and feeds ("Role-based analysis"). */
+const MODE_LABELS: Record<AnalysisType, string> = {
+  general: "General",
+  role_based: "Role-based",
+  jd_based: "JD-based",
+  custom: "Custom",
+};
+
+export function analysisModeLabel(mode: AnalysisType): string {
+  return MODE_LABELS[mode];
+}

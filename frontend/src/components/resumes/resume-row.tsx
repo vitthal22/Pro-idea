@@ -3,6 +3,7 @@
 import { FileText } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/format";
 import type { ResumeResponse } from "@/types/resume";
 
 // Backend parsing_status values: pending (while extracting), completed, failed.
@@ -17,14 +18,6 @@ const PARSING_STATUS: Record<
 
 function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 /** One uploaded resume as a card row (no detail page exists yet). */
