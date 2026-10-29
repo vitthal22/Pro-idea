@@ -6,12 +6,13 @@ from typing import Any
 
 from app.ai.evaluators.base import run_evaluator
 from app.ai.prompts.evaluators.technical import SYSTEM_PROMPT
+from app.ai.provider import AIResult
 from app.schemas.evaluators import TechnicalEvaluatorOutput
 
 
 async def run_technical_evaluator(
     resume_data: dict[str, Any],
-) -> TechnicalEvaluatorOutput:
+) -> tuple[TechnicalEvaluatorOutput, AIResult]:
     """Judge technical depth: evidenced work versus claimed skills."""
     return await run_evaluator(
         name="technical",

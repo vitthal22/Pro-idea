@@ -6,12 +6,13 @@ from typing import Any
 
 from app.ai.evaluators.base import run_evaluator
 from app.ai.prompts.evaluators.content_quality import SYSTEM_PROMPT
+from app.ai.provider import AIResult
 from app.schemas.evaluators import ContentQualityEvaluatorOutput
 
 
 async def run_content_quality_evaluator(
     resume_data: dict[str, Any],
-) -> ContentQualityEvaluatorOutput:
+) -> tuple[ContentQualityEvaluatorOutput, AIResult]:
     """Judge the writing itself: clarity, generic language, quantification."""
     return await run_evaluator(
         name="content_quality",

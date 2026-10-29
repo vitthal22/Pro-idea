@@ -6,10 +6,13 @@ from typing import Any
 
 from app.ai.evaluators.base import run_evaluator
 from app.ai.prompts.evaluators.ats import SYSTEM_PROMPT
+from app.ai.provider import AIResult
 from app.schemas.evaluators import ATSEvaluatorOutput
 
 
-async def run_ats_evaluator(resume_data: dict[str, Any]) -> ATSEvaluatorOutput:
+async def run_ats_evaluator(
+    resume_data: dict[str, Any],
+) -> tuple[ATSEvaluatorOutput, AIResult]:
     """Judge how the resume fares in automated parsing and ranking."""
     return await run_evaluator(
         name="ats",

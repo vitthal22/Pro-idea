@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from app.ai.provider import call_ai
+from app.ai.provider import AIResult, call_ai
 from app.common.exceptions import AIEvaluationError
 
 T = TypeVar("T", bound=BaseModel)
@@ -34,8 +34,12 @@ async def run_evaluator(
     system_prompt: str,
     response_model: type[T],
     resume_data: dict[str, Any],
-) -> T:
-    """Run one evaluator: prompt → AI call → validated output.
+) -> tuple[T, AIResult]:
+    """Run one evaluator: prompt → AI call → validated output + usage.
+
+    Returns:
+        The validated evaluator output and the underlying ``AIResult``
+        (token usage is recorded per AI call by the pipeline).
 
     Raises:
         AIEvaluationError: If the AI call fails or the output does not
@@ -50,4 +54,4 @@ async def run_evaluator(
         raise AIEvaluationError(
             evaluator=name, reason="model returned no structured evaluation"
         )
-    return result.data
+    return result.data, result

@@ -10,6 +10,7 @@ from app.common.exceptions import AuthenticationError
 from app.common.security import decode_token
 from app.config import settings
 from app.db.session import get_session_factory
+from app.services.analysis import AnalysisService
 from app.services.auth import AuthService
 from app.services.login_throttle import InMemoryLoginThrottle, LoginThrottle
 from app.services.resume import ResumeService
@@ -62,6 +63,13 @@ def get_resume_service(
 ) -> ResumeService:
     """Resume use cases bound to the request session and configured storage."""
     return ResumeService(session, storage, settings.max_file_size_mb)
+
+
+def get_analysis_service(
+    session: AsyncSession = Depends(get_db),
+) -> AnalysisService:
+    """Analysis use cases bound to the request session."""
+    return AnalysisService(session)
 
 
 _login_throttle_instance: LoginThrottle | None = None

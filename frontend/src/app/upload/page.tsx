@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResumeDropzone } from "@/components/upload/ResumeDropzone";
 import { useUploadResume } from "@/hooks/mutations/use-upload";
+import { useStartAnalysis } from "@/hooks/mutations/use-start-analysis";
 import { useCurrentUser } from "@/hooks/queries/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useAuthStore } from "@/stores/auth-store";
@@ -16,6 +17,7 @@ export default function UploadPage() {
   const { token } = useAuthStore((s) => s);
   const router = useRouter();
   const upload = useUploadResume();
+  const startAnalysis = useStartAnalysis();
 
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -36,7 +38,24 @@ export default function UploadPage() {
       setFileError("Please choose a PDF or DOCX file first.");
       return;
     }
-    upload.mutate(file, { onSuccess: () => router.push("/dashboard") });
+    // Auto-roast: the roast starts as soon as the upload succeeds.
+    upload.mutate(file, {
+      onSuccess: (resume) => {
+        startAnalysis.mutate(
+          { resumeId: resume.id },
+          {
+            onSuccess: (created) =>
+              router.push(`/analysis/${created.analysis_id}`),
+            onError: (err) =>
+              setFileError(
+                `Resume uploaded, but the roast could not start: ${
+                  err instanceof Error ? err.message : "unknown error"
+                }`,
+              ),
+          },
+        );
+      },
+    });
   }
 
   if (!token) {
@@ -91,6 +110,7 @@ export default function UploadPage() {
   const uploadError =
     fileError ??
     (upload.error instanceof Error ? upload.error.message : null);
+  const busy = upload.isPending || startAnalysis.isPending;
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,15 +118,18 @@ export default function UploadPage() {
 
       <div className="flex-1 p-6 md:p-8">
         <div className="mx-auto max-w-xl py-10">
-          <h2 className="mb-6 text-center text-2xl font-bold">
+          <h2 className="mb-2 text-center text-2xl font-bold">
             Upload Resume
           </h2>
+          <p className="mb-6 text-center text-sm text-muted-foreground">
+            Your roast starts automatically — four experts, one brutal score.
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <ResumeDropzone
               onFileSelected={handleFileSelected}
               onFileError={handleFileError}
-              disabled={upload.isPending}
+              disabled={busy}
             />
 
             {file && (
@@ -123,10 +146,14 @@ export default function UploadPage() {
 
             <Button
               type="submit"
-              disabled={upload.isPending}
+              disabled={busy}
               className="w-full"
             >
-              {upload.isPending ? "Uploading…" : "Upload Resume"}
+              {upload.isPending
+                ? "Uploading…"
+                : startAnalysis.isPending
+                  ? "Starting the roast…"
+                  : "Upload & roast"}
             </Button>
           </form>
         </div>

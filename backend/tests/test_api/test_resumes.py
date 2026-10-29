@@ -221,7 +221,13 @@ async def test_low_quality_upload_is_recorded_as_failed(
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "PARSING_FAILED"
 
-    resume = await db_session.scalar(select(ResumeModel))
+    # The dev database holds real leftover rows, so scope by the uploaded
+    # file's unique generated name instead of grabbing any resume row.
+    file_path = response.json()["error"]["details"]["file_path"]
+    file_name = file_path.replace("\\", "/").rsplit("/", 1)[-1]
+    resume = await db_session.scalar(
+        select(ResumeModel).where(ResumeModel.file_path.contains(file_name))
+    )
     assert resume is not None
     assert resume.parsing_status == "failed"
     assert resume.raw_text is None

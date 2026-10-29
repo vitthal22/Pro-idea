@@ -6,12 +6,13 @@ from typing import Any
 
 from app.ai.evaluators.base import run_evaluator
 from app.ai.prompts.evaluators.recruiter import SYSTEM_PROMPT
+from app.ai.provider import AIResult
 from app.schemas.evaluators import RecruiterEvaluatorOutput
 
 
 async def run_recruiter_evaluator(
     resume_data: dict[str, Any],
-) -> RecruiterEvaluatorOutput:
+) -> tuple[RecruiterEvaluatorOutput, AIResult]:
     """Screen the resume the way a recruiter's six-second scan would."""
     return await run_evaluator(
         name="recruiter",

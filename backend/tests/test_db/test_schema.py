@@ -1,6 +1,7 @@
 """Schema-level tests: constraints, JSONB round-trip, FK cascade."""
 
 from decimal import Decimal
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -91,7 +92,12 @@ async def test_full_chain_persists_and_roundtrips(
     assert stored_result.overall_score == Decimal("72.50")
     assert stored_result.critical_issues == [{"title": "No metrics"}]
 
-    stored_usage = await db_session.scalar(select(AnalysisUsageModel))
+    # Scope by analysis — the dev DB holds real usage rows from live runs.
+    stored_usage = await db_session.scalar(
+        select(AnalysisUsageModel).where(
+            AnalysisUsageModel.analysis_id == analysis.id
+        )
+    )
     assert stored_usage is not None
     assert stored_usage.cost_usd == Decimal("0.000123")
 
@@ -166,7 +172,7 @@ async def test_deleting_user_cascades_through_children(
 
     # The dev database is shared with real data, so assert on this user's
     # rows only — every row they owned must be gone.
-    owned: list[tuple[object, object]] = [
+    owned: list[tuple[Any, Any]] = [
         (ResumeModel, ResumeModel.user_id == user.id),
         (AnalysisModel, AnalysisModel.user_id == user.id),
         (AnalysisResultModel, AnalysisResultModel.analysis_id == analysis.id),

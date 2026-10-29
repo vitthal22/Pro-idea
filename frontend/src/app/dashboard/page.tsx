@@ -1,13 +1,15 @@
 "use client";
 
-import { FileText, FileUp } from "lucide-react";
+import { FileText, FileUp, Flame } from "lucide-react";
 import Link from "next/link";
 
+import { AnalysisCard } from "@/components/analysis/AnalysisCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAnalyses } from "@/hooks/queries/use-analyses";
 import { useResumes } from "@/hooks/queries/use-resumes";
 import type { ResumeResponse } from "@/types/resume";
 
@@ -56,6 +58,7 @@ function ResumeRow({ resume }: { resume: ResumeResponse }) {
 
 export default function DashboardPage() {
   const resumes = useResumes();
+  const roasts = useAnalyses();
 
   if (resumes.isPending) {
     return (
@@ -105,6 +108,25 @@ export default function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Roast history — hidden silently while the endpoint is unreachable;
+          the resumes list above is the primary content. */}
+      {roasts.data && roasts.data.total > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+            <Flame className="size-4 text-primary" aria-hidden />
+            Recent roasts
+            <span className="text-sm font-normal text-muted-foreground">
+              ({roasts.data.total})
+            </span>
+          </h2>
+          <div className="grid gap-3">
+            {roasts.data.items.slice(0, 5).map((roast) => (
+              <AnalysisCard key={roast.id} analysis={roast} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-3">
         {resumes.data.items.map((resume) => (

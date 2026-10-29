@@ -15,15 +15,15 @@ const STATUS_VARIANTS: Record<
   AnalysisStatus,
   "default" | "secondary" | "destructive" | "outline"
 > = {
-  QUEUED: "secondary",
-  EXTRACTING: "secondary",
-  PARSING: "secondary",
-  EVALUATING: "default",
-  SCORING: "default",
-  COMPOSING: "default",
-  COMPLETE: "default",
-  PARTIAL: "outline",
-  FAILED: "destructive",
+  queued: "secondary",
+  extracting: "secondary",
+  parsing: "secondary",
+  evaluating: "secondary",
+  scoring: "secondary",
+  composing: "secondary",
+  completed: "default",
+  partial: "outline",
+  failed: "destructive",
 };
 
 const MODE_LABELS: Record<AnalysisListItem["analysis_type"], string> = {
@@ -34,7 +34,11 @@ const MODE_LABELS: Record<AnalysisListItem["analysis_type"], string> = {
 };
 
 export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
-  const created = new Date(analysis.created_at).toLocaleString();
+  const created = new Date(analysis.created_at).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <Link href={`/analysis/${analysis.id}`} className="block">
@@ -44,9 +48,16 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
             <CardTitle className="text-base">
               {MODE_LABELS[analysis.analysis_type]} analysis
             </CardTitle>
-            <Badge variant={STATUS_VARIANTS[analysis.status]}>
-              {analysis.status}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {analysis.overall_score !== null && (
+                <span className="text-sm font-semibold">
+                  {Math.round(analysis.overall_score)}/100
+                </span>
+              )}
+              <Badge variant={STATUS_VARIANTS[analysis.status]}>
+                {analysis.status}
+              </Badge>
+            </div>
           </div>
           <CardDescription>Created {created}</CardDescription>
         </CardHeader>

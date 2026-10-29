@@ -101,9 +101,10 @@ async def test_evaluator_returns_validated_output(
 ) -> None:
     _patch_call_ai(monkeypatch, model, payload)
 
-    output = await evaluator(RESUME)
+    output, usage = await evaluator(RESUME)
 
     assert isinstance(output, model)
+    assert usage.model == "test-model"
 
 
 @pytest.mark.parametrize(
