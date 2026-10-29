@@ -1,34 +1,31 @@
-"""AI orchestrator - coordinates evaluator execution for analysis modes."""
+"""Evaluator registry — which evaluators exist and which run per mode.
+
+Phase-2 note: execution (parallel gather, partial-failure handling) lives in
+this module too once the pipeline is wired; today it only registers the
+evaluators built in Phase 1 and maps the ``general`` mode. ``role_based``/
+``jd_based``/``custom`` modes additionally need the Job Matcher evaluator
+and are not wired yet (out of MVP scope for now).
+"""
 
 from typing import Any
 
-from app.ai.evaluators.culture_fit import run_culture_fit_evaluator
+from app.ai.evaluators.ats import run_ats_evaluator
+from app.ai.evaluators.content_quality import run_content_quality_evaluator
+from app.ai.evaluators.recruiter import run_recruiter_evaluator
+from app.ai.evaluators.technical import run_technical_evaluator
 
-EVALUATOR_MAP: dict[str, Any] = {
-    "culture_fit": run_culture_fit_evaluator,
+GENERAL_EVALUATORS = [
+    run_recruiter_evaluator,
+    run_ats_evaluator,
+    run_technical_evaluator,
+    run_content_quality_evaluator,
+]
+
+_MODE_EVALUATORS: dict[str, list[Any]] = {
+    "general": GENERAL_EVALUATORS,
 }
-
-DEFAULT_EVALUATORS: list[str] = ["culture_fit"]
-
-MODE_EVALUATORS: dict[str, list[str]] = {
-    "general": ["culture_fit"],
-    "role_based": ["culture_fit"],
-    "jd_based": ["culture_fit"],
-    "custom": ["culture_fit"],
-}
-
-
-def get_evaluator(evaluator_name: str) -> Any | None:
-    """Get an evaluator function by name."""
-    return EVALUATOR_MAP.get(evaluator_name)
 
 
 def get_evaluators_for_mode(mode: str) -> list[Any]:
-    """Get all evaluator functions for a given analysis mode."""
-    evaluator_names = MODE_EVALUATORS.get(mode, DEFAULT_EVALUATORS)
-    return [get_evaluator(name) for name in evaluator_names if get_evaluator(name)]
-
-
-def get_all_evaluators() -> list[Any]:
-    """Get all registered evaluator functions."""
-    return [func for func in EVALUATOR_MAP.values() if func is not None]
+    """Evaluator functions to run for ``mode`` (empty for unwired modes)."""
+    return _MODE_EVALUATORS.get(mode, [])
