@@ -8,7 +8,8 @@ import type { ApiErrorBody, TokenResponse } from "@/types/api";
  * - Parses structured backend errors ({ error: { code, message } }).
  */
 
-const API_BASE_URL =
+/** Backend origin — also used by the SSE stream (EventSource cannot send headers). */
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export class ApiClientError extends Error {

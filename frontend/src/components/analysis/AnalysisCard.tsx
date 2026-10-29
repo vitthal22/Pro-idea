@@ -1,7 +1,9 @@
 "use client";
 
+import { motion } from "framer-motion";
 import Link from "next/link";
 
+import { ScoreRing } from "@/components/analysis/score-ring";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -41,27 +43,32 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
   });
 
   return (
-    <Link href={`/analysis/${analysis.id}`} className="block">
-      <Card className="transition-colors hover:border-primary/50">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-base">
-              {MODE_LABELS[analysis.analysis_type]} analysis
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              {analysis.overall_score !== null && (
-                <span className="text-sm font-semibold">
-                  {Math.round(analysis.overall_score)}/100
-                </span>
+    <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
+      <Link href={`/analysis/${analysis.id}`} className="block">
+        <Card className="transition-colors hover:border-primary/50">
+          <CardHeader>
+            <div className="flex items-center gap-4">
+              {analysis.overall_score !== null ? (
+                <ScoreRing score={analysis.overall_score} size={52} />
+              ) : (
+                <span
+                  className="size-11 shrink-0 rounded-full border-2 border-dashed border-border"
+                  aria-hidden
+                />
               )}
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base">
+                  {MODE_LABELS[analysis.analysis_type]} analysis
+                </CardTitle>
+                <CardDescription>Created {created}</CardDescription>
+              </div>
               <Badge variant={STATUS_VARIANTS[analysis.status]}>
                 {analysis.status}
               </Badge>
             </div>
-          </div>
-          <CardDescription>Created {created}</CardDescription>
-        </CardHeader>
-      </Card>
-    </Link>
+          </CardHeader>
+        </Card>
+      </Link>
+    </motion.div>
   );
 }

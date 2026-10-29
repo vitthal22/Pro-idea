@@ -12,6 +12,7 @@ from app.schemas.evaluators import RecruiterEvaluatorOutput
 
 async def run_recruiter_evaluator(
     resume_data: dict[str, Any],
+    context: dict[str, Any] | None = None,
 ) -> tuple[RecruiterEvaluatorOutput, AIResult]:
     """Screen the resume the way a recruiter's six-second scan would."""
     return await run_evaluator(
@@ -19,4 +20,5 @@ async def run_recruiter_evaluator(
         system_prompt=SYSTEM_PROMPT,
         response_model=RecruiterEvaluatorOutput,
         resume_data=resume_data,
+        context=context,
     )

@@ -1,8 +1,8 @@
 """Shared evaluator plumbing — one pattern for every evaluator.
 
 An evaluator is a pure function: structured resume data in, validated
-Pydantic output out. ``run_evaluator`` owns everything the four evaluators
-share (user-prompt composition, the ``call_ai`` invocation, output
+Pydantic output out. ``run_evaluator`` owns everything the evaluators
+share (context composition, the ``call_ai`` invocation, output
 validation, error wrapping), so each evaluator file only states its name,
 prompt, schema, and focus.
 """
@@ -19,13 +19,43 @@ from app.common.exceptions import AIEvaluationError
 
 T = TypeVar("T", bound=BaseModel)
 
+# Context keys appended to the user prompt when present in the analysis
+# context (role_based / jd_based / custom modes).
+_CONTEXT_LABELS: dict[str, str] = {
+    "target_role": "TARGET ROLE",
+    "job_description": "JOB DESCRIPTION",
+    "custom_instructions": "ADDITIONAL FOCUS (user's own words)",
+}
 
-def compose_user_prompt(resume_data: dict[str, Any]) -> str:
-    """Serialize the parsed resume as the evaluator's user prompt."""
-    return (
+_MAX_CONTEXT_CHARS = 4000  # cap per context block; truncate input, not instructions
+
+
+def compose_context_lines(context: dict[str, Any] | None) -> list[str]:
+    """Render the analysis context as labelled prompt blocks."""
+    if not context:
+        return []
+    lines: list[str] = []
+    for key, label in _CONTEXT_LABELS.items():
+        value = context.get(key)
+        if not value:
+            continue
+        text = str(value).strip()[:_MAX_CONTEXT_CHARS]
+        lines.append(f"{label}:\n{text}")
+    return lines
+
+
+def compose_user_prompt(
+    resume_data: dict[str, Any], context: dict[str, Any] | None = None
+) -> str:
+    """Serialize the parsed resume (plus analysis context) as the user prompt."""
+    prompt = (
         "RESUME DATA (JSON):\n"
         f"{json.dumps(resume_data, ensure_ascii=False, default=str)}"
     )
+    context_lines = compose_context_lines(context)
+    if context_lines:
+        prompt += "\n\nANALYSIS CONTEXT:\n" + "\n\n".join(context_lines)
+    return prompt
 
 
 async def run_evaluator(
@@ -34,8 +64,18 @@ async def run_evaluator(
     system_prompt: str,
     response_model: type[T],
     resume_data: dict[str, Any],
+    context: dict[str, Any] | None = None,
 ) -> tuple[T, AIResult]:
     """Run one evaluator: prompt → AI call → validated output + usage.
+
+    Args:
+        name: Evaluator name for logs/errors (e.g. ``"recruiter"``).
+        system_prompt: The evaluator's own system prompt.
+        response_model: Schema the output must validate against.
+        resume_data: Parsed resume (``StructuredResume.model_dump()``).
+        context: Optional analysis context (``target_role``,
+            ``job_description``, ``custom_instructions``) appended to the
+            user prompt for role/JD/custom modes.
 
     Returns:
         The validated evaluator output and the underlying ``AIResult``
@@ -47,7 +87,7 @@ async def run_evaluator(
     """
     result = await call_ai(
         system_prompt=system_prompt,
-        user_prompt=compose_user_prompt(resume_data),
+        user_prompt=compose_user_prompt(resume_data, context),
         response_model=response_model,
     )
     if not isinstance(result.data, response_model):

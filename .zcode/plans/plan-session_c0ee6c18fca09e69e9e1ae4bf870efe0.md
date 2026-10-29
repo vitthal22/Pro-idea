@@ -1,28 +1,31 @@
-# Plan: Upload → Automatic Brutal Roast — executed PHASE BY PHASE
+# UI Overhaul Plan — "Ember" design system, dark-first, full navigation
 
-**Execution mode (user-requested):** one phase at a time. After each phase I report the results and **wait for your go-ahead** before starting the next. Phase order below; nothing later runs until you say so.
+**Grounding from research:** dark-first + bento grids + subtle glass/liquid-glass surfaces are the dominant 2025–26 AI-SaaS look (Linear/Vercel-style radial glow); Tailwind v4 needs `@theme inline` tokens + `@custom-variant dark` (already present); `next-themes` is installed but never wired; the current palette is default shadcn grayscale — hence "plain". **Locked choices:** ember/fire-orange accent, dark by default with light/dark toggle, auto-roast kept but polished. **No backend changes needed** — analytics computes client-side from existing endpoints.
 
-## Locked decisions (user-confirmed)
-- Auto-roast after upload (frontend auto-starts a `general` analysis → progress/result page).
-- Keep `.env` as-is: `gemini-2.5-flash` primary / `gemini-2.5-flash-lite` fast (real key present).
-- Progress via 2s status polling (SSE later). Statuses lowercase: `queued → extracting → parsing → evaluating → scoring → composing → completed | partial | failed`.
+## Phase 1 — Design foundation + consistent app shell (the consistency fix)
+1. Install `framer-motion`; add shadcn `sheet` + `chart` components via CLI.
+2. **`globals.css` rewrite — the "Ember" token system**: dark-first warm-tinted surfaces (layered elevation instead of harsh borders), ember primary (`oklch` orange) + ember→amber gradients, full chart palette (ember/amber/teal/violet/rose), light theme = warm paper + same ember, glow/shimmer keyframes.
+3. **Theme wiring**: `ThemeProvider` (next-themes, `attribute="class"`, `defaultTheme="dark"`) in root layout + `suppressHydrationWarning`; `ThemeToggle` (sun/moon) component.
+4. **AppShell + route group**: move `dashboard, history, analytics, upload, profile, analysis/[id]` under one `(app)` route group whose layout = auth guard + proper flex shell (fixed sidebar + `main`) — kills the top-gap quirk everywhere. Old `dashboard/layout.tsx` absorbed.
+5. **New Sidebar**: brand (flame + wordmark), nav = Overview / Roasts (history) / Analytics, big ember **"New roast"** CTA, then Profile, ThemeToggle, user card + logout. Mobile: hamburger → shadcn Sheet. Shared `PageHeader` (title + description + actions) used by every page.
 
-## Phase 0 — Live AI smoke test (first, alone)
-One-off script with the real key: plain call on the primary model, structured-output call on the fast model. Confirms key + both models work before anything is built. Report exact provider errors if any.
+## Phase 2 — Overview (dashboard bento) + Roasts (history)
+- `/dashboard` becomes a **bento overview**: stat tiles (roasts count, avg score, best score, resumes), latest roast card with score ring, streak/recent activity, prominent "New roast" tile. Staggered fade-in animations.
+- `/history`: full roast list (AnalysisCard restyled: score ring chip, animated status badges) + uploaded resumes in a tab; `AnalysisCard` links stay `/analysis/[id]`.
+- Empty states upgraded (ember icon, CTA); toast notifications on actions (sonner, already installed).
 
-## Phase 1 — Evaluator layer
-Categorical-rating evaluator schemas in `app/schemas/evaluators.py` (AI never returns raw numbers); prompts `prompts/evaluators/{recruiter,ats,technical,content_quality}.py`; four evaluator functions in `app/ai/evaluators/` (ATS partly deterministic). Remove `culture_fit` evaluator + prompt and superseded `communication.py`/`technical_fit.py`. Mocked tests.
+## Phase 3 — Upload + roast experience + result (the polish)
+- **Upload**: glass dropzone (animated ember dashed border on drag), file chip with size, gradient CTA "Upload & roast". Auto-roast stays — but the transition becomes an animated hand-off (button morph → ember sweep).
+- **`/analysis/[id]` progress**: full "roast experience" — animated ember flame loader, stage checklist with per-stage transitions and a moving ember progress bar, pulsing glow card. Feels like a destination, not a teleport.
+- **Result**: animated **score ring** (SVG stroke animation counting up), gradient roast card (ember-tinted glass), findings as bento cards with per-item fade-in, category bars animating on load, styled partial banner. Restyles existing `RoastResult`/`StageProgress`.
 
-## Phase 2 — Pipeline brain
-Rewrite `orchestrator.py` (parallel evaluators, skip-and-flag on failure); new `aggregator.py` (dedupe → critical/warnings/suggestions/positives); rewrite `scoring.py` (50% deterministic checks / 50% AI categorical ratings → fixed ranges, mode weights, renormalization on partial failure); new `composer.py` + `prompts/composer.py` (roast text, deterministic fallback). Mocked tests incl. determinism + partial-failure renormalization.
+## Phase 4 — Landing page (Linear-style dark hero)
+- Sticky glass navbar; hero with radial ember glow + gradient headline + CTAs; CSS-built product mock (score ring + roast snippet); features bento (4 expert evaluators / hybrid scoring / brutal-but-constructive / private by design); 3-step "how it works"; final CTA + footer. Scroll-reveal animations via framer-motion. Auth pages get matching glass-card treatment.
 
-## Phase 3 — Analysis service + API
-`app/services/analysis.py` (ownership check, type validation, daily cap → 429, insert `queued`, `asyncio.create_task(run_pipeline)`, stage transitions, usage rows persisted, `completed/partial/failed` semantics) + `app/api/schemas/analyses.py` + `app/api/v1/analyses.py` (`POST /analyses` → 202, `GET /analyses`, `GET /{id}`, `GET /{id}/status`). Tests: API + pipeline (mocked AI).
+## Phase 5 — Analytics page (new, your missing page)
+- `/analytics`, client-computed from `GET /analyses` + `/resumes`: 4 stat tiles, **score trend** area chart (recharts via shadcn ChartContainer, ember palette), **score distribution** bar chart, recent activity feed, per-mode split. Empty state when no roasts yet.
 
-## Phase 4 — Frontend
-Real analysis types (lowercase statuses) + `useStartAnalysis` + fixed `use-analyses.ts`; upload page auto-starts the roast → new `/analysis/[id]` page (polling progress, score, breakdown, issues, final roast card, failed/partial states); dashboard "Recent roasts" via fixed `AnalysisCard`. eslint/tsc/build.
+## Phase 6 — Verification
+- `tsc` / eslint / `next build` green; browser walkthrough with screenshots of every page in **both themes** (desktop + one mobile width); fix what looks off; update `PROGRESS.md`. No commits.
 
-## Phase 5 — Full verification + tracker
-Backend checks + full pytest (AI mocked) → live end-to-end with the real key (upload → auto-roast → result page, DB rows verified) → `PROGRESS.md` update. No commits.
-
-**Out of scope:** SSE, role_based/jd_based/custom modes, rerun endpoint, slowapi per-tier limits, OCR, prompt_versions table.
+**References:** [SaaS design trends 2026](https://toimi.pro/blog/best-saas-website-designs), [Bento grids guide](https://www.saasframe.io/blog/designing-bento-grids-that-actually-work-a-2026-practical-guide), [AI-first SaaS design](https://www.outcrowd.io/blog/2026-design-trends-for-ai-first-saas-products), [Dark theming UX patterns](https://www.saasui.design/blog/saas-dark-mode-theming-ux-patterns), [shadcn dark mode](https://ui.shadcn.com/docs/dark-mode/next), [Tailwind v4 theming](https://ui.shadcn.com/docs/tailwind-v4), [AI startup aesthetic analysis](https://www.setproduct.com/blog/why-every-ai-startup-looks-the-same), [Dark SaaS analytics refs](https://dribbble.com/shots/27428790-Dark-SaaS-Analytics-Dashboard-Revenue-Orders-Conversion).

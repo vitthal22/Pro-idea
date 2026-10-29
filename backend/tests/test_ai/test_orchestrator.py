@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 
-from app.ai import orchestrator as orchestrator_module
 from app.ai.evaluators import base as evaluator_base
 from app.ai.orchestrator import (
     EvaluatorResults,
@@ -15,11 +14,19 @@ from app.ai.provider import AIResult
 from app.schemas.evaluators import (
     ATSEvaluatorOutput,
     ContentQualityEvaluatorOutput,
+    JobMatchEvaluatorOutput,
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
 
 RESUME: dict[str, Any] = {"contact_info": {"name": "Jane Doe"}}
+
+CONTEXT: dict[str, Any] = {
+    "target_role": "backend_dev",
+    "job_description": None,
+    "custom_instructions": None,
+    "role_slug": "backend_dev",
+}
 
 # Valid payload per evaluator, keyed by its output model.
 _PAYLOADS: dict[type, dict[str, Any]] = {
@@ -45,6 +52,13 @@ _PAYLOADS: dict[type, dict[str, Any]] = {
         "summary": "Generic.",
         "writing_quality_rating": "fair",
         "quantification_rating": "poor",
+    },
+    JobMatchEvaluatorOutput: {
+        "summary": "Strong backend fit.",
+        "match_rating": "good",
+        "matched_skills": ["Python", "PostgreSQL"],
+        "missing_skills": ["Kubernetes operations"],
+        "recommendations": ["Quantify API scale"],
     },
 }
 
@@ -107,5 +121,56 @@ async def test_all_failures_yield_empty_outputs(
 
 
 def test_unknown_mode_returns_no_evaluators() -> None:
-    assert get_evaluators_for_mode("jd_based") == {}
-    assert get_evaluators_for_mode("general") == orchestrator_module.EVALUATOR_MAP
+    assert set(get_evaluators_for_mode("jd_based")) == {
+        "recruiter",
+        "ats",
+        "technical",
+        "content_quality",
+        "job_matcher",
+    }
+    assert get_evaluators_for_mode("made_up") == {}
+    assert set(get_evaluators_for_mode("general")) == {
+        "recruiter",
+        "ats",
+        "technical",
+        "content_quality",
+    }
+
+
+async def test_role_based_runs_job_matcher_with_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_call_ai_dispatch(monkeypatch, fail_for=None)
+    captured: list[dict[str, Any]] = []
+
+    async def capture_user_prompt(**kwargs: Any):
+        captured.append(kwargs)
+        model = kwargs["response_model"]
+        return AIResult(
+            content="json",
+            model="test-model",
+            data=model.model_validate(_PAYLOADS[model]),
+        )
+
+    monkeypatch.setattr(evaluator_base, "call_ai", capture_user_prompt)
+
+    results = await run_evaluations(RESUME, "role_based", CONTEXT)
+
+    assert "job_matcher" in results.outputs
+    assert results.failed == {}
+    # Every evaluator's user prompt carries the role context.
+    assert len(captured) == 5
+    assert all("TARGET ROLE" in c["user_prompt"] for c in captured)
+    assert all("backend_dev" in c["user_prompt"] for c in captured)
+
+
+async def test_job_matcher_fails_fast_without_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """role_based without target_role/jd context fails only the matcher."""
+    _patch_call_ai_dispatch(monkeypatch, fail_for=None)
+
+    results = await run_evaluations(RESUME, "role_based", context=None)
+
+    assert set(results.failed) == {"job_matcher"}
+    assert len(results.outputs) == 4

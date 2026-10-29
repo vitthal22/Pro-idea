@@ -94,9 +94,7 @@ async def test_full_chain_persists_and_roundtrips(
 
     # Scope by analysis — the dev DB holds real usage rows from live runs.
     stored_usage = await db_session.scalar(
-        select(AnalysisUsageModel).where(
-            AnalysisUsageModel.analysis_id == analysis.id
-        )
+        select(AnalysisUsageModel).where(AnalysisUsageModel.analysis_id == analysis.id)
     )
     assert stored_usage is not None
     assert stored_usage.cost_usd == Decimal("0.000123")

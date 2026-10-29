@@ -71,6 +71,9 @@ class AnalysisResultPayload(BaseModel):
     methodology: dict[str, Any] | None = Field(
         description="Weights, renormalization, partial-failure flags"
     )
+    job_match_feedback: dict[str, Any] | None = Field(
+        description="Job Matcher output (role_based/jd_based modes only)"
+    )
     evaluator_summaries: dict[str, str]
     failed_evaluators: list[str]
     roast_fallback_used: bool = Field(

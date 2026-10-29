@@ -6,6 +6,7 @@ from app.ai.scoring import MODE_WEIGHTS, calculate_scores
 from app.schemas.evaluators import (
     ATSEvaluatorOutput,
     ContentQualityEvaluatorOutput,
+    JobMatchEvaluatorOutput,
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
@@ -72,6 +73,26 @@ def test_rating_maps_to_fixed_bands() -> None:
     assert ratings["experience"] == 78.5  # good
     assert ratings["role_relevance"] == 94.0  # strong → excellent band
     assert set(ratings) == set(MODE_WEIGHTS["general"])
+
+
+def test_job_matcher_drives_role_relevance_when_present() -> None:
+    outputs = {
+        **_ALL_OUTPUTS,
+        "job_matcher": JobMatchEvaluatorOutput(
+            summary="Strong fit.",
+            match_rating="excellent",
+            matched_skills=["Python"],
+        ),
+    }
+
+    result = calculate_scores(_STRONG_RESUME, _RAW_TEXT, outputs, [], mode="role_based")
+
+    relevance = {c.category: c for c in result.ai_categories}["role_relevance"]
+    assert relevance.rating == "excellent"
+    assert relevance.score == 94.0
+    assert "job_matcher.match_rating" in relevance.details
+    # role_based weights apply
+    assert result.methodology["mode_weights"] == MODE_WEIGHTS["role_based"]
 
 
 def test_empty_resume_scores_low() -> None:

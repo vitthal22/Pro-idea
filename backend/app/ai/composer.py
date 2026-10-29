@@ -72,19 +72,35 @@ def _fallback_roast(aggregated: AggregatedResults, scoring: ScoringResult) -> st
 
 
 async def compose_roast(
-    aggregated: AggregatedResults, scoring: ScoringResult
+    aggregated: AggregatedResults,
+    scoring: ScoringResult,
+    custom_instructions: str | None = None,
 ) -> tuple[str, bool, AIResult | None]:
     """Compose the final roast.
+
+    Args:
+        aggregated: Deduplicated expert findings.
+        scoring: The hybrid scoring result (score + context for the roast).
+        custom_instructions: The user's own focus areas (``custom`` mode) —
+            the roast leans into what they asked to be judged on.
 
     Returns:
         ``(roast_text, fallback_used, usage)`` — ``fallback_used`` is True
         when the AI pass failed and the deterministic template was served;
         ``usage`` carries the composer call's token counts (None on fallback).
     """
+    focus = ""
+    if custom_instructions and custom_instructions.strip():
+        focus = (
+            "\n\nUSER FOCUS (the candidate explicitly asked to be judged on "
+            "this — roast it hardest):\n"
+            f"{custom_instructions.strip()[:500]}"
+        )
     user_prompt = (
         "Write the roast from these expert findings:\n\n"
         "FINDINGS (JSON):\n"
         f"{json.dumps(_compact(aggregated, scoring), ensure_ascii=False)}"
+        f"{focus}"
     )
     try:
         result = await call_ai(

@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
 
+    # USD per 1M tokens for the configured models — when both are set the
+    # pipeline computes analysis_usage.cost_usd; otherwise cost stays null.
+    ai_input_price_per_m: float | None = None
+    ai_output_price_per_m: float | None = None
+
     # Auth
     jwt_secret_key: str = "change-this-to-a-random-string-at-least-32-chars"
     jwt_algorithm: str = "HS256"

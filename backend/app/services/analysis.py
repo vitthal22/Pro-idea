@@ -19,6 +19,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -33,9 +34,11 @@ from app.ai.parser import parse_resume
 from app.ai.prompts.composer import VERSION as COMPOSER_VERSION
 from app.ai.prompts.evaluators.ats import VERSION as ATS_VERSION
 from app.ai.prompts.evaluators.content_quality import VERSION as CONTENT_VERSION
+from app.ai.prompts.evaluators.job_matcher import VERSION as JOB_MATCHER_VERSION
 from app.ai.prompts.evaluators.recruiter import VERSION as RECRUITER_VERSION
 from app.ai.prompts.evaluators.technical import VERSION as TECHNICAL_VERSION
 from app.ai.prompts.parser import VERSION as PARSER_VERSION
+from app.ai.prompts.roles import get_role_context
 from app.ai.scoring import calculate_scores
 from app.common.exceptions import (
     AnalysisFailedError,
@@ -59,12 +62,18 @@ PROMPT_VERSIONS: dict[str, str] = {
     "ats": ATS_VERSION,
     "technical": TECHNICAL_VERSION,
     "content_quality": CONTENT_VERSION,
+    "job_matcher": JOB_MATCHER_VERSION,
     "composer": COMPOSER_VERSION,
 }
 
 
-async def _enforce_daily_cap(session: AsyncSession, user_id: UUID) -> None:
-    """Reject analyses beyond the configured per-day limit (free tier)."""
+def _tier_daily_limit(tier: str) -> int:
+    """Per-tier daily analysis cap from settings (free default)."""
+    return settings.rate_limit_pro if tier == "pro" else settings.rate_limit_free
+
+
+async def _enforce_daily_cap(session: AsyncSession, user_id: UUID, tier: str) -> None:
+    """Reject analyses beyond the tier's configured per-day limit."""
     start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     used = await session.scalar(
         select(func.count())
@@ -74,10 +83,9 @@ async def _enforce_daily_cap(session: AsyncSession, user_id: UUID) -> None:
             AnalysisModel.created_at >= start_of_day,
         )
     )
-    if (used or 0) >= settings.rate_limit_free:
-        raise RateLimitError(
-            f"Daily analysis limit of {settings.rate_limit_free} reached"
-        )
+    limit = _tier_daily_limit(tier)
+    if (used or 0) >= limit:
+        raise RateLimitError(f"Daily analysis limit of {limit} reached")
 
 
 class AnalysisService:
@@ -95,6 +103,7 @@ class AnalysisService:
         target_role: str | None = None,
         job_description: str | None = None,
         custom_instructions: str | None = None,
+        tier: str = "free",
         schedule: bool = True,
     ) -> AnalysisModel:
         """Validate the request, insert a queued analysis, schedule the run.
@@ -102,19 +111,34 @@ class AnalysisService:
         Args:
             user_id: Owner (must also own the resume).
             resume_id: Resume to roast (must exist and not be soft-deleted).
-            analysis_type: Only ``general`` is wired today.
+            analysis_type: ``general`` always; ``role_based`` needs
+                ``target_role``; ``jd_based`` needs ``job_description``;
+                ``custom`` leans into ``custom_instructions``.
             schedule: False in tests that drive ``_execute_pipeline`` directly.
+
+        Raises:
+            ValidationError: Unknown mode, or missing mode-required context.
+            NotFoundError: Resume missing, not owned, or soft-deleted.
+            RateLimitError: Daily tier cap reached.
         """
         if not get_evaluators_for_mode(analysis_type):
             raise ValidationError(
                 f"Analysis type '{analysis_type}' is not available yet; use 'general'"
+            )
+        if analysis_type == "role_based" and not (target_role or "").strip():
+            raise ValidationError(
+                "role_based analysis requires target_role (pick a role)"
+            )
+        if analysis_type == "jd_based" and not (job_description or "").strip():
+            raise ValidationError(
+                "jd_based analysis requires job_description (paste the posting)"
             )
 
         resume = await self._session.get(ResumeModel, resume_id)
         if resume is None or resume.user_id != user_id or resume.deleted_at is not None:
             raise NotFoundError("Resume not found")
 
-        await _enforce_daily_cap(self._session, user_id)
+        await _enforce_daily_cap(self._session, user_id, tier)
 
         analysis = AnalysisModel(
             user_id=user_id,
@@ -188,6 +212,22 @@ async def _set_stage(
     await session.commit()
 
 
+def _analysis_context(analysis: AnalysisModel) -> dict[str, Any]:
+    """Analysis context for the evaluators (mode-specific mode inputs).
+
+    ``role_slug`` carries the registered role-context prompt when the
+    user's target_role matches one; unknown roles pass through as text only.
+    """
+    return {
+        "target_role": analysis.target_role,
+        "job_description": analysis.job_description,
+        "custom_instructions": analysis.custom_instructions,
+        "role_slug": (
+            analysis.target_role if get_role_context(analysis.target_role) else None
+        ),
+    }
+
+
 async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
     """The pipeline proper: parse → evaluate → score → compose → persist.
 
@@ -216,17 +256,25 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
 
         await _set_stage(session, analysis, "evaluating")
         evaluations = await run_evaluations(
-            structured.model_dump(), analysis.analysis_type
+            structured.model_dump(),
+            analysis.analysis_type,
+            context=_analysis_context(analysis),
         )
 
         await _set_stage(session, analysis, "scoring")
         aggregated = aggregate_results(evaluations.outputs, evaluations.failed_names)
         scoring = calculate_scores(
-            structured, raw_text, evaluations.outputs, evaluations.failed_names
+            structured,
+            raw_text,
+            evaluations.outputs,
+            evaluations.failed_names,
+            mode=analysis.analysis_type,
         )
 
         await _set_stage(session, analysis, "composing")
-        roast, roast_fallback, composer_usage = await compose_roast(aggregated, scoring)
+        roast, roast_fallback, composer_usage = await compose_roast(
+            aggregated, scoring, custom_instructions=analysis.custom_instructions
+        )
 
         session.add(
             _result_row(
@@ -243,6 +291,7 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
                     ai_model=usage.model,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
+                    cost_usd=_cost_usd(usage),
                 )
             )
 
@@ -273,6 +322,17 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
         await session.commit()
 
 
+def _cost_usd(usage: Any) -> Decimal | None:
+    """Call cost from configured per-1M-token prices; None when unpriced."""
+    if settings.ai_input_price_per_m is None or settings.ai_output_price_per_m is None:
+        return None
+    cost = (
+        usage.prompt_tokens / 1_000_000 * settings.ai_input_price_per_m
+        + usage.completion_tokens / 1_000_000 * settings.ai_output_price_per_m
+    )
+    return Decimal(str(round(cost, 6)))
+
+
 def _feedback(outputs: dict[str, Any], name: str) -> dict[str, Any] | None:
     output = outputs.get(name)
     return output.model_dump() if output is not None else None
@@ -293,6 +353,7 @@ def _result_row(
         ats_feedback=_feedback(evaluations.outputs, "ats"),
         technical_feedback=_feedback(evaluations.outputs, "technical"),
         content_feedback=_feedback(evaluations.outputs, "content_quality"),
+        job_match_feedback=_feedback(evaluations.outputs, "job_matcher"),
         critical_issues=[item.model_dump() for item in aggregated.critical_issues],
         warnings=[item.model_dump() for item in aggregated.warnings],
         suggestions=[item.model_dump() for item in aggregated.suggestions],

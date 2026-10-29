@@ -124,3 +124,34 @@ class ContentQualityEvaluatorOutput(BaseModel):
         description="Confusing, contradictory, or buried information with where "
         "it occurs",
     )
+
+
+class JobMatchEvaluatorOutput(BaseModel):
+    """Fit of the resume against a target role or job description.
+
+    Only produced by the Job Matcher evaluator, which runs for the
+    ``role_based`` and ``jd_based`` modes (context is required).
+    """
+
+    summary: str = Field(max_length=300, description="Two-sentence fit verdict")
+    match_rating: QualityRating = Field(
+        description="Overall fit between the resume and the target role or "
+        "job description"
+    )
+    matched_skills: list[str] = Field(
+        default_factory=list,
+        description="Required skills/qualities the resume evidences",
+    )
+    missing_skills: list[str] = Field(
+        default_factory=list,
+        description="Required skills/qualities with no resume evidence",
+    )
+    alignment_findings: list[str] = Field(
+        default_factory=list,
+        description="Specific resume-to-requirements matches or mismatches, "
+        "citing the resume",
+    )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="Concrete changes that would raise the fit score",
+    )

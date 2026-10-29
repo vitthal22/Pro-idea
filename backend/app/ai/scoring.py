@@ -36,7 +36,7 @@ _RATING_MIDPOINT: dict[str, float] = {
 }
 
 # First impression (strong/average/weak) stands in for the general mode's
-# role-relevance category — there is no target role to match against yet.
+# role-relevance category when the Job Matcher did not run.
 _IMPRESSION_RATING: dict[str, str] = {
     "strong": "excellent",
     "average": "good",
@@ -47,6 +47,29 @@ _IMPRESSION_RATING: dict[str, str] = {
 # side contributes 50% of the overall score, distributed by these weights.
 MODE_WEIGHTS: dict[str, dict[str, float]] = {
     "general": {
+        "content_quality": 0.25,
+        "experience": 0.25,
+        "skills_alignment": 0.15,
+        "ats_compatibility": 0.20,
+        "role_relevance": 0.15,
+    },
+    "role_based": {
+        "content_quality": 0.20,
+        "experience": 0.20,
+        "skills_alignment": 0.20,
+        "ats_compatibility": 0.15,
+        "role_relevance": 0.25,
+    },
+    "jd_based": {
+        "content_quality": 0.20,
+        "experience": 0.20,
+        "skills_alignment": 0.25,
+        "ats_compatibility": 0.20,
+        "role_relevance": 0.15,
+    },
+    # custom keeps the general weights; custom_instructions steer the
+    # evaluators' focus instead of reweighting the outcome.
+    "custom": {
         "content_quality": 0.25,
         "experience": 0.25,
         "skills_alignment": 0.15,
@@ -277,13 +300,20 @@ def calculate_scores(
     weights = MODE_WEIGHTS.get(mode, MODE_WEIGHTS["general"])
     categories: list[CategoryScore] = []
     for category, weight in weights.items():
-        source_eval, source_field = _CATEGORY_SOURCES[category]
+        if category == "role_relevance" and "job_matcher" in evaluator_outputs:
+            # A real fit judgment beats the first-impression stand-in.
+            source_eval, source_field = "job_matcher", "match_rating"
+        else:
+            source_eval, source_field = _CATEGORY_SOURCES[category]
         rating = _rating_of(source_eval, source_field, evaluator_outputs)
         if rating is None:
             continue
         if category == "role_relevance":
-            # First impression mapped onto the quality scale.
-            mapped = _IMPRESSION_RATING.get(rating, "poor")
+            if source_eval == "job_matcher":
+                mapped = rating if rating in _RATING_MIDPOINT else "missing"
+            else:
+                # First impression mapped onto the quality scale.
+                mapped = _IMPRESSION_RATING.get(rating, "poor")
         else:
             mapped = rating if rating in _RATING_MIDPOINT else "missing"
         categories.append(

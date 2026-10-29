@@ -5,8 +5,10 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.analysis import AnalysisModel
 from app.services import analysis as analysis_service_module
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -64,19 +66,19 @@ async def test_create_analysis_unknown_resume_404(
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
-async def test_create_analysis_unwired_mode_400(
+async def test_create_analysis_invalid_mode_422(
     client, auth_headers, docx_bytes_factory, scheduled_ids
 ) -> None:
+    """All four documented modes are wired; unknown values fail validation."""
     resume_id = await _upload_resume(client, auth_headers, docx_bytes_factory)
 
     response = await client.post(
         ANALYSES,
         headers=auth_headers,
-        json={"resume_id": resume_id, "analysis_type": "jd_based"},
+        json={"resume_id": resume_id, "analysis_type": "made_up"},
     )
 
-    assert response.status_code == 400
-    assert "not available" in response.json()["error"]["message"]
+    assert response.status_code == 422
 
 
 async def test_create_analysis_for_other_users_resume_404(
@@ -189,6 +191,57 @@ async def test_other_user_cannot_read_analysis(
         assert response.status_code == 404
 
 
+async def test_create_analysis_role_based_requires_target_role(
+    client, auth_headers, docx_bytes_factory, scheduled_ids
+) -> None:
+    resume_id = await _upload_resume(client, auth_headers, docx_bytes_factory)
+
+    missing = await client.post(
+        ANALYSES,
+        headers=auth_headers,
+        json={"resume_id": resume_id, "analysis_type": "role_based"},
+    )
+    ok = await client.post(
+        ANALYSES,
+        headers=auth_headers,
+        json={
+            "resume_id": resume_id,
+            "analysis_type": "role_based",
+            "target_role": "backend_dev",
+        },
+    )
+
+    assert missing.status_code == 400
+    assert "target_role" in missing.json()["error"]["message"]
+    assert ok.status_code == 202
+    assert ok.json()["status"] == "queued"
+
+
+async def test_create_analysis_jd_based_requires_job_description(
+    client, auth_headers, docx_bytes_factory, scheduled_ids
+) -> None:
+    resume_id = await _upload_resume(client, auth_headers, docx_bytes_factory)
+
+    missing = await client.post(
+        ANALYSES,
+        headers=auth_headers,
+        json={"resume_id": resume_id, "analysis_type": "jd_based"},
+    )
+    ok = await client.post(
+        ANALYSES,
+        headers=auth_headers,
+        json={
+            "resume_id": resume_id,
+            "analysis_type": "jd_based",
+            "job_description": "Build APIs with Python.",
+        },
+    )
+
+    assert missing.status_code == 400
+    assert "job_description" in missing.json()["error"]["message"]
+    assert ok.status_code == 202
+
+
 async def test_daily_rate_limit_returns_429(
     client, auth_headers, docx_bytes_factory, scheduled_ids, monkeypatch
 ) -> None:
@@ -209,3 +262,45 @@ async def test_daily_rate_limit_returns_429(
     assert first.status_code == 202
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMITED"
+
+
+async def test_stream_replays_terminal_state_immediately(
+    client,
+    auth_headers,
+    docx_bytes_factory,
+    scheduled_ids,
+    db_session: AsyncSession,
+) -> None:
+    """A stream opened after completion replays `complete` and ends (idempotent)."""
+    from uuid import UUID as UUIDType
+
+    resume_id = await _upload_resume(client, auth_headers, docx_bytes_factory)
+    created = (
+        await client.post(
+            ANALYSES,
+            headers=auth_headers,
+            json={"resume_id": resume_id, "analysis_type": "general"},
+        )
+    ).json()
+
+    # Simulate a finished pipeline (scheduler is stubbed in these tests).
+    analysis = await db_session.get(AnalysisModel, UUIDType(created["analysis_id"]))
+    assert analysis is not None
+    analysis.status = "completed"
+    await db_session.commit()
+
+    frames: list[str] = []
+    async with client.stream(
+        "GET",
+        f"{ANALYSES}/{created['analysis_id']}/stream",
+        headers=auth_headers,
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        # The stream ends on its own after the terminal event.
+        async for line in response.aiter_lines():
+            frames.append(line)
+
+    assert "event: complete" in frames
+    joined = "\n".join(frames)
+    assert '"analysis_id"' in joined

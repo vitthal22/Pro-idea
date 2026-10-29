@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.schemas.evaluators import (
     ATSEvaluatorOutput,
     ContentQualityEvaluatorOutput,
+    JobMatchEvaluatorOutput,
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
@@ -58,6 +59,10 @@ def aggregate_results(
     content_out = outputs.get("content_quality")
     content = (
         content_out if isinstance(content_out, ContentQualityEvaluatorOutput) else None
+    )
+    job_match_out = outputs.get("job_matcher")
+    job_match = (
+        job_match_out if isinstance(job_match_out, JobMatchEvaluatorOutput) else None
     )
 
     critical_issues: list[ReportItem] = []
@@ -108,6 +113,20 @@ def aggregate_results(
             for t in content.generic_language_issues
         ]
         evaluator_summaries["content_quality"] = content.summary
+
+    if job_match is not None:
+        warnings += [
+            ReportItem(text=t, source="job_matcher") for t in job_match.missing_skills
+        ]
+        warnings += [
+            ReportItem(text=t, source="job_matcher")
+            for t in job_match.alignment_findings
+        ]
+        suggestions += [
+            ReportItem(text=t, source="job_matcher") for t in job_match.recommendations
+        ]
+        positive_notes += job_match.matched_skills
+        evaluator_summaries["job_matcher"] = job_match.summary
 
     return AggregatedResults(
         critical_issues=_dedupe(critical_issues),

@@ -1,5 +1,6 @@
 """Service tests for the roast pipeline (AI fully mocked)."""
 
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,7 @@ from app.models.resume import ResumeModel
 from app.schemas.evaluators import (
     ATSEvaluatorOutput,
     ContentQualityEvaluatorOutput,
+    JobMatchEvaluatorOutput,
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
@@ -57,6 +59,13 @@ _EVALUATOR_PAYLOADS: dict[str, BaseModel] = {
     "content_quality": ContentQualityEvaluatorOutput(
         summary="Decent.", writing_quality_rating="fair", quantification_rating="poor"
     ),
+    "job_matcher": JobMatchEvaluatorOutput(
+        summary="Strong backend fit.",
+        match_rating="good",
+        matched_skills=["Python", "PostgreSQL"],
+        missing_skills=["Kubernetes operations"],
+        recommendations=["Quantify API scale"],
+    ),
 }
 
 
@@ -71,15 +80,25 @@ def _patch_ai(
     failed_evaluators: dict[str, str] | None = None,
     roast: str = "Your resume needs work, and here is why.",
     roast_fallback: bool = False,
+    captured: dict[str, Any] | None = None,
 ) -> None:
-    """Stub parse_resume / run_evaluations / compose_roast at the seams."""
+    """Stub parse_resume / run_evaluations / compose_roast at the seams.
+
+    ``captured`` (when given) receives the context and custom_instructions
+    the pipeline handed to the seams — used to assert mode wiring.
+    """
 
     async def fake_parse_resume(raw_text: str) -> StructuredResume:
         if fail_parsing is not None:
             raise RuntimeError(fail_parsing)
         return STRUCTURED
 
-    async def fake_run_evaluations(resume_data: dict, mode: str) -> EvaluatorResults:
+    async def fake_run_evaluations(
+        resume_data: dict, mode: str, context: dict | None = None
+    ) -> EvaluatorResults:
+        if captured is not None:
+            captured["mode"] = mode
+            captured["context"] = context
         outputs = {
             name: payload
             for name, payload in _EVALUATOR_PAYLOADS.items()
@@ -91,7 +110,9 @@ def _patch_ai(
             usage=[_usage() for _ in outputs],
         )
 
-    async def fake_compose_roast(aggregated, scoring):
+    async def fake_compose_roast(aggregated, scoring, custom_instructions=None):
+        if captured is not None:
+            captured["custom_instructions"] = custom_instructions
         return roast, roast_fallback, _usage()
 
     monkeypatch.setattr(analysis_module, "parse_resume", fake_parse_resume)
@@ -100,7 +121,14 @@ def _patch_ai(
 
 
 async def _make_queued_analysis(
-    db_session: AsyncSession, email_factory, *, raw_text: str | None = "Jane Doe resume"
+    db_session: AsyncSession,
+    email_factory,
+    *,
+    raw_text: str | None = "Jane Doe resume",
+    analysis_type: str = "general",
+    target_role: str | None = None,
+    job_description: str | None = None,
+    custom_instructions: str | None = None,
 ) -> AnalysisModel:
     """A user + resume + queued analysis, all inside the test transaction."""
     user = await PostgresUserRepository(db_session).create(
@@ -121,7 +149,10 @@ async def _make_queued_analysis(
     analysis = AnalysisModel(
         user_id=user.id,
         resume_id=resume.id,
-        analysis_type="general",
+        analysis_type=analysis_type,
+        target_role=target_role,
+        job_description=job_description,
+        custom_instructions=custom_instructions,
         status="queued",
     )
     db_session.add(analysis)
@@ -149,6 +180,7 @@ async def test_pipeline_success_persists_result_and_usage(
         "ats",
         "technical",
         "content_quality",
+        "job_matcher",
         "composer",
     }
 
@@ -170,7 +202,7 @@ async def test_pipeline_success_persists_result_and_usage(
         .select_from(AnalysisUsageModel)
         .where(AnalysisUsageModel.analysis_id == analysis.id)
     )
-    assert usage_count == 5  # 4 evaluators + 1 composer
+    assert usage_count == 6  # 5 evaluator outputs (incl. job_matcher mock) + 1 composer
 
     # Parsed data is stored back on the resume for reuse.
     stored_resume = await db_session.get(ResumeModel, analysis.resume_id)
@@ -293,3 +325,218 @@ async def test_create_analysis_validates_ownership_mode_and_cap(
         await service.create_analysis(
             user_id=user.id, resume_id=resume.id, schedule=False
         )
+
+
+async def test_role_based_pipeline_passes_context_and_persists_job_match(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    captured: dict[str, Any] = {}
+    _patch_ai(monkeypatch, captured=captured)
+    analysis = await _make_queued_analysis(
+        db_session,
+        email_factory,
+        analysis_type="role_based",
+        target_role="backend_dev",
+    )
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    # The mode + context reached the orchestrator seam...
+    assert captured["mode"] == "role_based"
+    assert captured["context"]["target_role"] == "backend_dev"
+    assert captured["context"]["role_slug"] == "backend_dev"
+    # ...and the Job Matcher output was persisted on the result row.
+    result = await db_session.scalar(
+        select(AnalysisResultModel).where(
+            AnalysisResultModel.analysis_id == analysis.id
+        )
+    )
+    assert result is not None
+    assert result.job_match_feedback is not None
+    assert result.job_match_feedback["summary"] == "Strong backend fit."
+
+
+async def test_custom_mode_passes_user_focus_to_composer(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    captured: dict[str, Any] = {}
+    _patch_ai(monkeypatch, captured=captured)
+    analysis = await _make_queued_analysis(
+        db_session,
+        email_factory,
+        analysis_type="custom",
+        custom_instructions="Tear apart my bullet points",
+    )
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    assert captured["mode"] == "custom"
+    assert captured["custom_instructions"] == "Tear apart my bullet points"
+
+
+async def test_create_analysis_rejects_incomplete_mode_context(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    """role_based needs target_role; jd_based needs job_description."""
+    from app.common.exceptions import ValidationError
+
+    _patch_ai(monkeypatch)
+    service = AnalysisService(db_session)
+    user = await PostgresUserRepository(db_session).create(
+        email=email_factory("modes"),
+        name="Modes",
+        password_hash="hash",
+    )
+    resume = ResumeModel(
+        user_id=user.id,
+        file_path=f"{user.id}/modes.docx",
+        original_name="modes.docx",
+        file_size=100,
+        mime_type=DOCX_MIME,
+        raw_text="some text",
+    )
+    db_session.add(resume)
+    await db_session.flush()
+
+    with pytest.raises(ValidationError):
+        await service.create_analysis(
+            user_id=user.id,
+            resume_id=resume.id,
+            analysis_type="role_based",
+            schedule=False,
+        )
+
+    with pytest.raises(ValidationError):
+        await service.create_analysis(
+            user_id=user.id,
+            resume_id=resume.id,
+            analysis_type="jd_based",
+            schedule=False,
+        )
+
+    # With the required context both modes validate and queue.
+    role_based = await service.create_analysis(
+        user_id=user.id,
+        resume_id=resume.id,
+        analysis_type="role_based",
+        target_role="backend_dev",
+        schedule=False,
+    )
+    assert role_based.status == "queued"
+
+    jd_based = await service.create_analysis(
+        user_id=user.id,
+        resume_id=resume.id,
+        analysis_type="jd_based",
+        job_description="Build APIs with Python. Own Postgres schemas.",
+        schedule=False,
+    )
+    assert jd_based.status == "queued"
+
+
+async def test_daily_cap_is_per_tier(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    """Pro users draw from rate_limit_pro, not the free cap."""
+    from sqlalchemy import update
+
+    from app.models.user import UserModel
+
+    _patch_ai(monkeypatch)
+    service = AnalysisService(db_session)
+    user = await PostgresUserRepository(db_session).create(
+        email=email_factory("pro"),
+        name="Pro User",
+        password_hash="hash",
+    )
+    resume = ResumeModel(
+        user_id=user.id,
+        file_path=f"{user.id}/pro.docx",
+        original_name="pro.docx",
+        file_size=100,
+        mime_type=DOCX_MIME,
+        raw_text="some text",
+    )
+    db_session.add(resume)
+    await db_session.flush()
+    await db_session.execute(
+        update(UserModel).where(UserModel.id == user.id).values(tier="pro")
+    )
+    await db_session.flush()
+
+    monkeypatch.setattr(analysis_module.settings, "rate_limit_free", 0)
+    monkeypatch.setattr(analysis_module.settings, "rate_limit_pro", 1)
+
+    # A free user is capped at 0 — pro gets their own budget.
+    from app.common.exceptions import RateLimitError
+
+    assert user.id is not None
+    with pytest.raises(RateLimitError):
+        await service.create_analysis(
+            user_id=user.id,
+            resume_id=resume.id,
+            tier="free",
+            schedule=False,
+        )
+
+    first = await service.create_analysis(
+        user_id=user.id, resume_id=resume.id, tier="pro", schedule=False
+    )
+    assert first.status == "queued"
+    with pytest.raises(RateLimitError):
+        await service.create_analysis(
+            user_id=user.id, resume_id=resume.id, tier="pro", schedule=False
+        )
+
+
+async def test_usage_rows_carry_cost_when_pricing_is_configured(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    from decimal import Decimal
+
+    _patch_ai(monkeypatch)
+    monkeypatch.setattr(analysis_module.settings, "ai_input_price_per_m", 0.30)
+    monkeypatch.setattr(analysis_module.settings, "ai_output_price_per_m", 2.50)
+    analysis = await _make_queued_analysis(db_session, email_factory)
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    usage_rows = (
+        await db_session.scalars(
+            select(AnalysisUsageModel).where(
+                AnalysisUsageModel.analysis_id == analysis.id
+            )
+        )
+    ).all()
+    assert usage_rows
+    # 100 prompt tokens at 0.30/1M + 50 completion tokens at 2.50/1M
+    expected = Decimal(str(round(100 / 1_000_000 * 0.30 + 50 / 1_000_000 * 2.50, 6)))
+    assert all(row.cost_usd == expected for row in usage_rows)
+
+
+async def test_role_based_pipeline_uses_role_based_weights(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    captured: dict[str, Any] = {}
+    _patch_ai(monkeypatch, captured=captured)
+    analysis = await _make_queued_analysis(
+        db_session,
+        email_factory,
+        analysis_type="role_based",
+        target_role="backend_dev",
+    )
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    result = await db_session.scalar(
+        select(AnalysisResultModel).where(
+            AnalysisResultModel.analysis_id == analysis.id
+        )
+    )
+    assert result is not None
+    stored = (result.scoring_methodology or {})["mode_weights"]
+    assert stored["role_relevance"] == 0.25  # role_based table, not general's 0.15

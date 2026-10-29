@@ -83,11 +83,11 @@
 
 ### M1.6 — Middleware
 
-- [~] `app/common/middleware.py` — Rate limiting with `slowapi` (3/day free, 50/day pro) — **login brute-force throttle done** as a service seam (`LoginThrottle`, 429 after `LOGIN_RATE_LIMIT_PER_HOUR` failures per email+client); per-tier slowapi limits still pending
-- [x] Add `CORSMiddleware` to `app/main.py`
-- [ ] Add request logging middleware
+- [~] `app/common/middleware.py` — Rate limiting — **updated 2026-10-29**: per-tier daily cap (free 3 / pro 50 from settings, by `users.tier`) enforced in the analysis service + login brute-force throttle via `LoginThrottle`; slowapi burst limiting itself stays deferred (meaningful per-IP limits need Redis for multi-worker)
+- [x] Add `CORSMiddleware` to `app/main.py` — now registered via `common/middleware.py::setup_middleware` together with logging
+- [x] Add request logging middleware — `http_request method/path/status/duration_ms` per request + `X-Process-Time` response header
 - [x] Add global exception handler for `AppException` → structured JSON error response
-- [~] Verify: 429 asserted for login throttling (`tests/test_api/test_auth_throttle.py`); per-tier slowapi limits and CORS header assertions still missing
+- [x] Verify: 429 asserted for login throttling; **per-tier cap asserted** (`test_daily_cap_is_per_tier`); **CORS asserted** (`test_middleware.py`: configured origin allowed, preflight OK, unknown origin rejected)
 
 
 
@@ -212,61 +212,39 @@
 
 ### M3.1 — AI Provider Wrapper
 
-- [ ] `app/ai/provider.py` — `call_ai(model, messages, response_model, max_retries) -> (result, usage)`
-  - Wraps `litellm.acompletion()`
-  - Handles retries (exponential backoff)
-  - Handles rate limits (litellm built-in)
-  - Returns structured Pydantic result + token usage dict
-  - Logs model, tokens, cost
-- [ ] Fallback chain: primary → fallback → emergency (per `FALLBACK_CHAIN` in architecture)
-- [ ] Test: mock litellm, verify retry logic, verify usage tracking
-
-
+- [x] `app/ai/provider.py` — `call_ai(model, messages, response_model, max_retries) -> (result, usage)` — **done, adapted (2026-10-29)**: async `litellm.acompletion`, config from `Settings`, retries with backoff, structured outputs via `response_model`, returns `AIResult` (content + parsed data + token usage)
+- [x] Fallback chain: primary → fallback → emergency (per `FALLBACK_CHAIN` in architecture) — primary → `AI_FAST_MODEL`, env-tunable (`ai_fallback_enabled`); proven live when gemini-3.8-flash timeouts fell back to the fast model
+- [x] Test: mock litellm, verify retry logic, verify usage tracking — `tests/test_ai/test_provider.py` (8 tests: success/usage, structured validation, retry, fallback, exhaustion, missing-key fail-fast, local provider, missing usage)
 
 ### M3.2 — Prompt Composition System
 
-- [ ] `app/ai/prompts/__init__.py` — `load_prompt(module_path) -> str` helper
-- [ ] `app/ai/prompts/base.py` — Base system prompt (the "you are an expert resume analyst" context)
-- [ ] Define `ComposedPrompt` dataclass: `{ system: str, user: str, schema: type }`
-- [ ] `compose_prompt(evaluator, resume_data, mode, target_role?, job_description?, custom_instructions?) -> ComposedPrompt` function
-- [ ] Verify: compose a prompt, see it as string, validate structure
-
-
+- [~] `app/ai/prompts/__init__.py` — `load_prompt(module_path) -> str` helper — **adapted**: prompts are versioned Python modules (`VERSION` + `SYSTEM_PROMPT`) imported directly, no string loader
+- [~] `app/ai/prompts/base.py` — Base system prompt — **adapted**: each evaluator/parser/composer owns its `SYSTEM_PROMPT` in `app/ai/prompts/`; no shared base prompt
+- [~] Define `ComposedPrompt` dataclass: `{ system: str, user: str, schema: type }` — **adapted**: system prompt + user prompt composed in `evaluators/base.py`; the schema is appended as JSON-schema instructions by `call_ai(response_model=...)`
+- [x] `compose_prompt(evaluator, resume_data, mode, target_role?, job_description?, custom_instructions?) -> ComposedPrompt` function — **adapted (2026-10-29)**: `compose_user_prompt(resume_data, context)` appends TARGET ROLE / JOB DESCRIPTION / USER FOCUS blocks; mode weights per mode in scoring
+- [x] Verify: compose a prompt, see it as string, validate structure — `tests/test_ai/test_evaluators.py::test_compose_user_prompt_serializes_resume_as_json`
 
 ### M3.3 — AI Output Schemas
 
-- [ ] `app/schemas/resume.py` — `StructuredResume` model (all fields: contact_info, summary, experience[], education[], skills[], certifications[], projects[], languages[], etc.)
-- [ ] `app/schemas/evaluators.py` — All evaluator output schemas:
-  - `CriticalIssue` (title, description, category, severity, improvement, recruiter_perspective)
-  - `RecruiterEvaluation` (summary, first_impression, critical_issues[], strengths[], hire_recommendation)
-  - `ATSEvaluation` (summary, keyword_analysis, ats_score, section_completeness, formatting_issues[])
-  - `TechnicalEvaluation` (summary, tech_stack_assessment, relevance_score, gaps[], strengths[])
-  - `ContentQualityEvaluation` (summary, writing_quality, generic_language_issues[], quantification_score)
-  - `JobMatchEvaluation` (summary, match_score, alignment{}, gaps[], recommendations[])
-- [ ] All use `Field(description=...)` for every field (becomes part of prompt)
-- [ ] All use `Literal` for enum-like fields (not custom Enum classes)
-- [ ] Test: validate with mock data, validate with bad data (should fail)
-
-
+- [x] `app/schemas/resume.py` — `StructuredResume` model — **done, adapted field names** (contact_info/experience/education/skills/certifications/projects/languages; all `Field(description=...)`)
+- [x] `app/schemas/evaluators.py` — All evaluator output schemas — **done, adapted**: categorical ratings (`excellent|good|fair|poor|missing`) instead of raw numbers, per ARCHITECTURE §13; fields differ from this list by design (see file)
+- [x] All use `Field(description=...)` for every field (becomes part of prompt) — descriptions double as prompt guidance
+- [x] All use `Literal` for enum-like fields (not custom Enum classes) — `QualityRating` + impression/credibility Literals
+- [x] Test: validate with mock data, validate with bad data (should fail) — `tests/test_ai/test_evaluators.py` (valid payloads ×4; invalid/numeric/over-length rejected — verified live 2026-10-29)
 
 ### M3.4 — Resume Parser
 
-- [ ] `app/ai/parser.py` — `parse_resume(raw_text) -> StructuredResume`
-  - Compose parser prompt from `app/ai/prompts/parser.py`
-  - Call AI via `call_ai()` with `StructuredResume` as response_model
-  - Return parsed resume
-- [ ] `app/ai/prompts/parser.py` — Parser prompt + output schema reference
-- [ ] Handle: missing fields → empty defaults, extra fields → ignored
-- [ ] Test: mock AI returning valid JSON → `StructuredResume` object
-
-
+- [x] `app/ai/parser.py` — `parse_resume(raw_text) -> StructuredResume` — on `AI_FAST_MODEL`, truncates input at 15k chars (never the system prompt)
+- [x] `app/ai/prompts/parser.py` — Parser prompt + output schema reference (`PARSER_RESPONSE_MODEL`)
+- [x] Handle: missing fields → empty defaults, extra fields → ignored — extraction-only rules in the prompt; Pydantic ignores unknown keys
+- [x] Test: mock AI returning valid JSON → `StructuredResume` object — `tests/test_ai/test_parser.py` (4 tests)
 
 ### M3.5 — Token/Cost Tracking
 
-- [ ] Add `track_usage(user_id, analysis_id, model, usage)` to `AnalysisUsage` table
-- [ ] Integrate into `call_ai()` provider wrapper
-- [ ] Calculate cost: `prompt_tokens * price + completion_tokens * price`
-- [ ] Test: mock call_ai, verify usage record created
+- [x] Add `track_usage(user_id, analysis_id, model, usage)` to `AnalysisUsage` table — **adapted**: the pipeline writes one `AnalysisUsageModel` row per AI call (evaluators + composer) directly
+- [x] Integrate into `call_ai()` provider wrapper — `AIResult` carries prompt/completion tokens; `compose_roast` returns its usage too
+- [x] Calculate cost: `prompt_tokens * price + completion_tokens * price` — **done (2026-10-29)**: `ai_input_price_per_m` / `ai_output_price_per_m` settings (null = unpriced); `_cost_usd()` computes per call; tested
+- [x] Test: mock call_ai, verify usage record created — `tests/test_services/test_analysis.py` (5 usage rows for 4 evaluators + composer)
 
 ---
 
@@ -282,78 +260,60 @@
 
 ### M4.1 — Evaluator Base Pattern
 
-- [ ] `app/ai/evaluators/base.py` — Define `EvaluationContext` dataclass (model, mode, target_role?, job_description?, custom_instructions?)
-- [ ] Define evaluator function signature protocol: `async def evaluator(resume_data, context) -> EvaluationResult`
-- [ ] Document the pattern (one evaluator = one file, one function, one prompt)
-
-
+- [x] `app/ai/evaluators/base.py` — **done, adapted**: `run_evaluator()` (prompt → AI call → validated output + usage) and `compose_user_prompt()`; one evaluator = one file, one function, one prompt (registry in `orchestrator.py`)
+- [x] Define evaluator function signature protocol: `async def evaluator(resume_data, context) -> EvaluationResult` — adapted: `async def evaluator(resume_data) -> tuple[OutputModel, AIResult]` (usage flows to `analysis_usage`)
+- [x] Document the pattern (one evaluator = one file, one function, one prompt) — docstrings in `base.py` + each evaluator
 
 ### M4.2 — Recruiter Evaluator
 
-- [ ] `app/ai/prompts/evaluators/recruiter.py` — System prompt + output schema ref
-- [ ] `app/ai/evaluators/recruiter.py` — `run_recruiter_evaluator(resume_data, context) -> RecruiterEvaluation`
-  - Loads prompt, composes messages, calls AI, validates output
-- [ ] Test: mock AI → valid RecruiterEvaluation returned
-
-
+- [x] `app/ai/prompts/evaluators/recruiter.py` — System prompt + output schema ref — VERSION + SYSTEM_PROMPT (six-second scan, credibility, red flags)
+- [x] `app/ai/evaluators/recruiter.py` — `run_recruiter_evaluator(resume_data) -> RecruiterEvaluation` — via shared `run_evaluator`, validated against `RecruiterEvaluatorOutput`
+- [x] Test: mock AI → valid RecruiterEvaluation returned — `tests/test_ai/test_evaluators.py` (mocked `call_ai`, valid + no-data cases)
 
 ### M4.3 — ATS Evaluator
 
-- [ ] `app/ai/prompts/evaluators/ats.py` — System prompt
-- [ ] `app/ai/evaluators/ats.py` — `run_ats_evaluator(resume_data, context) -> ATSEvaluation`
-  - Hybrid: mostly deterministic keyword matching + AI for overall impression
-- [ ] Test: mock AI → valid ATSEvaluation
-
-
+- [x] `app/ai/prompts/evaluators/ats.py` — System prompt
+- [x] `app/ai/evaluators/ats.py` — `run_ats_evaluator(resume_data) -> ATSEvaluation` — **adapted hybrid**: AI judges parse readiness/formatting/missing keywords; the deterministic half (sections, contact, bullets, dates) lives in `scoring.py`'s checks, which run on `StructuredResume` without AI
+- [x] Test: mock AI → valid ATSEvaluation
 
 ### M4.4 — Technical Evaluator
 
-- [ ] `app/ai/prompts/evaluators/technical.py` — System prompt
-- [ ] `app/ai/evaluators/technical.py` — `run_technical_evaluator(resume_data, context) -> TechnicalEvaluation`
-- [ ] Test: mock AI → valid TechnicalEvaluation
-
-
+- [x] `app/ai/prompts/evaluators/technical.py` — System prompt
+- [x] `app/ai/evaluators/technical.py` — `run_technical_evaluator(resume_data) -> TechnicalEvaluation`
+- [x] Test: mock AI → valid TechnicalEvaluation
 
 ### M4.5 — Content Quality Evaluator
 
-- [ ] `app/ai/prompts/evaluators/content_quality.py` — System prompt
-- [ ] `app/ai/evaluators/content_quality.py` — `run_content_quality_evaluator(resume_data, context) -> ContentQualityEvaluation`
-- [ ] Test: mock AI → valid ContentQualityEvaluation
-
-
+- [x] `app/ai/prompts/evaluators/content_quality.py` — System prompt
+- [x] `app/ai/evaluators/content_quality.py` — `run_content_quality_evaluator(resume_data) -> ContentQualityEvaluation`
+- [x] Test: mock AI → valid ContentQualityEvaluation
 
 ### M4.6 — Job Matcher Evaluator
 
-- [ ] `app/ai/prompts/evaluators/job_matcher.py` — System prompt
-- [ ] `app/ai/evaluators/job_matcher.py` — `run_job_matcher_evaluator(resume_data, context) -> JobMatchEvaluation`
-- [ ] Test: mock AI → valid JobMatchEvaluation
-
-
+- [x] `app/ai/prompts/evaluators/job_matcher.py` — System prompt — fit-only-against-context rules; role context from `prompts/roles/` appended for known slugs
+- [x] `app/ai/evaluators/job_matcher.py` — `run_job_matcher_evaluator(resume_data, context) -> JobMatchEvaluation` — fails fast without target_role/jd context (no fabricated fit)
+- [x] Test: mock AI → valid JobMatchEvaluation — orchestrator + aggregator + scoring tests cover it
 
 ### M4.7 — AI Orchestrator
 
-- [ ] `app/ai/orchestrator.py` — `run_evaluation(resume_data, analysis) -> dict`
-  - Determine which evaluators to run based on `analysis_type`
-  - Run evaluators in parallel via `asyncio.gather(return_exceptions=True)`
-  - If one fails → store partial result, continue others
-  - Collect all results, pass to aggregator
-- [ ] General mode → Recruiter + ATS + Technical + Content Quality
-- [ ] Role-based mode → all above + Job Matcher
-- [ ] JD-based mode → all above + Job Matcher
-- [ ] Custom mode → all above + custom instructions injection
-- [ ] Test: mock all evaluators, verify parallel execution, verify failure handling
-
-
+- [x] `app/ai/orchestrator.py` — `run_evaluation(resume_data, analysis) -> dict` — **done, adapted**: `run_evaluations(resume_data, mode) -> EvaluatorResults` (outputs + failed + usage), `asyncio.gather(return_exceptions=True)`
+- [x] If one fails → store partial result, continue others — failure recorded in `failed` with reason; scoring renormalizes (never scores zero); proven live (survived a 500 + 503 from Gemini)
+- [x] Collect all results, pass to aggregator — `aggregator.aggregate_results(outputs, failed_names)`
+- [x] General mode → Recruiter + ATS + Technical + Content Quality
+- [x] Role-based mode → all above + Job Matcher — `target_role` reaches every prompt; role context appended for known slugs; role_based weights (§13) applied
+- [x] JD-based mode → all above + Job Matcher — `job_description` in context; required at creation
+- [x] Custom mode → all above + custom instructions injection — context reaches evaluators; composer gets "USER FOCUS".
+- [x] Test: mock all evaluators, verify parallel execution, verify failure handling — `tests/test_ai/test_orchestrator.py` (all-succeed, single-failure, all-fail, unknown mode)
 
 ### M4.8 — Result Aggregator
 
-- [ ] `app/ai/aggregator.py` — `aggregate_results(evaluator_results) -> AggregatedResults`
-  - Collect all evaluator outputs
-  - Deduplicate observations across evaluators
-  - Organize: Critical Issues → Warnings → Suggestions → Positive Notes
-  - Both perspectives coexist (recruiter says X, technical says Y)
-- [ ] Return `AggregatedResults` with: `critical_issues[]`, `warnings[]`, `suggestions[]`, `positive_notes[]`, `evaluator_summaries{}`
-- [ ] Test: two evaluators with overlapping findings → deduplicated output
+- [x] `app/ai/aggregator.py` — `aggregate_results(evaluator_results) -> AggregatedResults` — deterministic merge; severity buckets: red flags → critical; credibility flags/gaps/formatting/clarity → warnings; generic phrasing + missing keywords → suggestions
+- [x] Collect all evaluator outputs
+- [x] Deduplicate observations across evaluators — whitespace/punctuation-insensitive key, per bucket
+- [x] Organize: Critical Issues → Warnings → Suggestions → Positive Notes
+- [x] Both perspectives coexist (recruiter says X, technical says Y) — items carry `source`
+- [x] Return `AggregatedResults` with: `critical_issues[]`, `warnings[]`, `suggestions[]`, `positive_notes[]`, `evaluator_summaries{}` — plus `failed_evaluators[]`
+- [x] Test: two evaluators with overlapping findings → deduplicated output — `tests/test_ai/test_aggregator.py`
 
 ---
 
@@ -369,51 +329,33 @@
 
 ### M5.1 — Deterministic Scoring Components
 
-- [ ] `app/scoring/score_calculator.py` — Individual checks:
-  - `score_section_completeness(structured_resume) -> 0-5`
-  - `score_bullet_points(structured_resume) -> 0-5`
-  - `score_word_count(structured_resume) -> 0-3`
-  - `score_keyword_density(structured_resume, context) -> 0-5`
-  - `score_formatting(structured_resume) -> 0-5`
-  - `score_contact_info(structured_resume) -> 0-2`
-  - `score_date_consistency(structured_resume) -> 0-3`
-  - `score_quantified_achievements(structured_resume) -> 0-5`
-  - `score_action_verbs(structured_resume) -> 0-5`
-  - `score_redundancy(structured_resume) -> 0-5`
-  - `score_length_appropriateness(structured_resume) -> 0-5`
-- [ ] Each returns `{ score: int, max: int, details: str }`
-- [ ] Test: valid resume → scores make sense; empty resume → low scores
-
-
+- [x] `app/scoring/score_calculator.py` — **done, adapted**: lives in `app/ai/scoring.py` per ARCHITECTURE §13 (no separate `scoring/` package). 8 checks implemented (vs the 11 sketched): section completeness 0–5, bullet points 0–5, word count 0–3, contact info 0–2, date consistency 0–3, quantified achievements 0–5, action verbs 0–5, formatting quality 0–5. Keyword density + length-appropriateness deferred (need role/JD context)
+- [x] Each returns `{ score: int, max: int, details: str }` — adapted: `DeterministicCheck(name, score, max, details)`
+- [x] Test: valid resume → scores make sense; empty resume → low scores — `tests/test_ai/test_scoring.py`
 
 ### M5.2 — Hybrid Scoring Engine
 
-- [ ] `app/ai/scoring.py` — `calculate_scores(aggregated_results, evaluator_outputs, mode) -> ScoringResult`
-  - Deterministic: 50% of total
-  - AI-assessed: 50% of total (from evaluator summaries)
-  - Mode-specific weights (from architecture: Content Quality, Experience, Skills Alignment, ATS, Role Relevance)
-- [ ] Return: `{ overall_score: 0-100, breakdown: {...}, methodology: {...} }`
-- [ ] Test: same inputs → same scores (deterministic part reproducible)
-
-
+- [x] `app/ai/scoring.py` — `calculate_scores(aggregated_results, evaluator_outputs, mode) -> ScoringResult` — **done, adapted signature**: `calculate_scores(resume, raw_text, evaluator_outputs, failed_evaluators, mode)`
+- [x] Deterministic: 50% of total
+- [x] AI-assessed: 50% of total (from evaluator summaries) — from evaluator categorical ratings mapped to fixed bands (excellent 94 / good 78.5 / fair 57 / poor 32 / missing 9.5)
+- [x] Mode-specific weights (from architecture: Content Quality, Experience, Skills Alignment, ATS, Role Relevance) — `MODE_WEIGHTS` (general wired; role/JD pending)
+- [x] Partial-failure weight renormalization — failed categories dropped, surviving weights renormalized to 100%; deterministic-only fallback when all AI fails
+- [x] Return: `{ overall_score: 0-100, breakdown: {...}, methodology: {...} }` — `ScoringResult` in `app/schemas/report.py`
+- [x] Test: same inputs → same scores (deterministic part reproducible) — `test_determinism_same_inputs_same_score` + renormalization tests
 
 ### M5.3 — Roast Compositor
 
-- [ ] `app/ai/composer.py` — `compose_roast(aggregated_results, scores, context) -> str`
-  - Load composer prompt from `app/ai/prompts/composer.py`
-  - Feed aggregated results + scores
-  - AI synthesizes constructive roast
-  - Handle failure: return raw aggregated results as fallback
-- [ ] `app/ai/prompts/composer.py` — Composer prompt (tone: brutally honest + constructive)
-- [ ] Test: mock AI → valid roast text returned
-
-
+- [x] `app/ai/composer.py` — `compose_roast(aggregated_results, scores, context) -> str` — **done, adapted**: returns `(roast, fallback_used, usage)`; 200–350 word prose, quotes findings, no invention
+- [x] Load composer prompt from `app/ai/prompts/composer.py` — VERSION + SYSTEM_PROMPT (persona + rules)
+- [x] Feed aggregated results + scores — compact JSON within token budget (8 items/list, 160 chars/item)
+- [x] Handle failure: return raw aggregated results as fallback — deterministic template; pipeline marks the analysis `partial`
+- [x] Test: mock AI → valid roast text returned — `tests/test_ai/test_composer.py` (AI path, failure fallback, empty-response fallback, template never raises)
 
 ### M5.4 — Analysis Results Schema
 
-- [ ] `app/schemas/report.py` — `FinalReport` model (overall_score, breakdown, critical_issues[], warnings[], suggestions[], positive_notes[], final_roast, metadata)
-- [ ] `app/schemas/scoring.py` — `ScoringResult`, `ScoreBreakdown`, `ScoreMethodology`
-- [ ] Verify: `AnalysisResult` JSONB columns match these schemas
+- [x] `app/schemas/report.py` — `FinalReport` model — **done, adapted**: `AggregatedResults` + `AnalysisResultPayload` (assembled in the API layer from `analysis_results` columns)
+- [x] `app/schemas/scoring.py` — `ScoringResult`, `ScoreBreakdown`, `ScoreMethodology` — **done, adapted**: `ScoringResult`, `DeterministicCheck`, `CategoryScore` in `app/schemas/report.py`
+- [x] Verify: `AnalysisResult` JSONB columns match these schemas — pipeline writes `model_dump()` outputs; the API reads them back (`tests/test_services/test_analysis.py` round-trips the columns)
 
 ---
 
@@ -429,61 +371,50 @@
 
 ### M6.1 — Analysis Service
 
-- [ ] `app/services/analysis.py` — `create_analysis(user_id, resume_id, mode, options) -> Analysis`
-  - Create DB record with status `QUEUED`
-  - Trigger pipeline (sync for MVP)
-  - Update status through: `EXTRACTING` → `PARSING` → `EVALUATING` → `SCORING` → `COMPOSING` → `COMPLETE`
-  - On failure: set status `FAILED`, store `error_message`
-- [ ] Pipeline steps:
-  1. Fetch resume → extract text (M2.6)
-  2. Parse resume via AI → `StructuredResume` (M3.4)
+- [x] `app/services/analysis.py` — `create_analysis(user_id, resume_id, mode, options) -> Analysis` — ownership/soft-delete check (404), mode validation (only `general` wired → 400), daily cap from `settings.rate_limit_free` (429), inserts `queued`, schedules `run_pipeline` via `asyncio.create_task` (fire-and-forget per ARCHITECTURE §11 MVP — client disconnects never lose work)
+- [x] Pipeline steps — **done, adapted**: `extracting → parsing → evaluating → scoring → composing → completed | partial | failed`; extraction reads the already-stored `raw_text` (upload extracted it); stages commit so status polls see progress
+  1. Fetch resume → extract text (M2.6) — text already stored at upload; missing text → clean `failed`
+  2. Parse resume via AI → `StructuredResume` (M3.4) — stored into `resume.structured_data["parsed"]`
   3. Run evaluators via orchestrator (M4.7)
   4. Aggregate results (M4.8)
   5. Calculate scores (M5.2)
-  6. Compose roast (M5.3)
-  7. Store results in `AnalysisResult`
-  8. Return final report
-- [ ] Track `processing_time_ms`, `ai_model_used`, `prompt_versions_used`
-- [ ] Test: mock all AI calls, verify full pipeline runs end-to-end
-
-
+  6. Compose roast (M5.3) — deterministic fallback on failure
+  7. Store results in `AnalysisResult` — plus one `analysis_usage` row per AI call
+  8. Return final report — via `GET /analyses/{id}` (background pipeline, not the request)
+- [x] Track `processing_time_ms`, `ai_model_used`, `prompt_versions_used` — all recorded on the analysis row
+- [x] On failure: set status `FAILED`, store `error_message` — `failed` with clean message; never a traceback
+- [x] Test: mock all AI calls, verify full pipeline runs end-to-end — `tests/test_services/test_analysis.py` (success/partial/failure/no-text/roast-fallback) + live HTTP E2E verified 2026-10-29
 
 ### M6.2 — Analysis API Endpoints
 
-- [ ] `app/api/schemas/analyses.py` — `AnalysisCreateRequest`, `AnalysisResponse`, `AnalysisStatusResponse`, `AnalysisListResponse`, `AnalysisResultResponse`
-- [ ] `app/api/v1/analyses.py` — Router:
-  - `POST /` (201) — create analysis, returns analysis_id
+- [x] `app/api/schemas/analyses.py` — `AnalysisCreateRequest`, `AnalysisResponse`, `AnalysisStatusResponse`, `AnalysisListResponse`, `AnalysisResultResponse` — adapted names: `AnalysisCreatedResponse`, `AnalysisListItemResponse`, `AnalysisStatusResponse`, `AnalysisDetailResponse` (+ `AnalysisResultPayload`)
+- [x] `app/api/v1/analyses.py` — Router:
+  - `POST /` (201) — create analysis, returns analysis_id — **done, adapted**: **202** `{analysis_id, status: "queued"}` per ARCHITECTURE §10
   - `GET /{analysis_id}` — full result
   - `GET /{analysis_id}/status` — status only (fast)
-  - `GET /` — list user's analyses
-- [ ] Include in `app/api/v1/router.py`
-- [ ] Test: create analysis → 201, poll status → complete, get result → full data
-
-
+  - `GET /` — list user's analyses — paginated (`limit`/`offset`)
+- [x] Include in `app/api/v1/router.py`
+- [x] Test: create analysis → 201, poll status → complete, get result → full data — `tests/test_api/test_analyses.py` (202/404/400/401/429/list/status/detail); live E2E polled `parsing → evaluating → composing → completed`
 
 ### M6.3 — SSE Streaming (MVP)
 
-- [ ] `app/api/v1/analyses.py` — Add `GET /{analysis_id}/stream` endpoint
-  - Return `StreamingResponse(media_type="text/event-stream")`
-  - Yield events: `extraction`, `parsing`, `evaluation`, `scoring`, `composition`, `complete`
-  - Each event: `{ step, status, progress?, data? }`
-- [ ] Test: connect via `httpx` SSE client, verify events received
-
-
+- [x] `app/api/v1/analyses.py` — Add `GET /{analysis_id}/stream` endpoint — **done (2026-10-29)**: `StreamingResponse` SSE; ownership checked before streaming; heartbeat comments every 15s; idempotent (terminal state replays instantly); the stream is a viewer, not the executor
+  - Return `StreamingResponse(media_type="text/event-stream")` — done
+  - Yield events: `status` per stage, then `complete` (with score) or `error`
+  - Each event: `{ step, state }` / `{ analysis_id, status, overall_score }` (adapted shapes)
+- [x] Test: connect via `httpx` SSE client, verify events received — `test_stream_replays_terminal_state_immediately` + live curl verification
 
 ### M6.4 — General Mode
 
-- [ ] Wire `AnalysisType.GENERAL` → evaluators: Recruiter, ATS, Technical, Content Quality
-- [ ] Test: create general analysis → runs 4 evaluators, no job matcher
-
-
+- [x] Wire `AnalysisType.GENERAL` → evaluators: Recruiter, ATS, Technical, Content Quality — `orchestrator._MODE_EVALUATORS["general"]`
+- [x] Test: create general analysis → runs 4 evaluators, no job matcher — orchestrator + API tests
 
 ### M6.5 — Role-Based Mode
 
-- [ ] Wire `AnalysisType.ROLE_BASED` → all evaluators + Job Matcher
-- [ ] Add `target_role` to context → role-specific prompts from `app/ai/prompts/roles/`
-- [ ] Create role prompt files: `frontend_dev.py`, `backend_dev.py`, `fullstack_dev.py`, `ai_engineer.py`, `data_scientist.py`, `devops.py`
-- [ ] Test: create role-based analysis → runs all 5 evaluators
+- [x] Wire `AnalysisType.ROLE_BASED` → all evaluators + Job Matcher — done 2026-10-29; verified live (score 70.69, job_match_feedback persisted)
+- [x] Add `target_role` to context → role-specific prompts from `app/ai/prompts/roles/` — `ROLE_CONTEXT_PROMPTS` registry; known slugs append role context, unknown roles pass as text
+- [x] Create role prompt files: `frontend_dev.py`, `backend_dev.py`, `fullstack_dev.py`, `ai_engineer.py`, `data_scientist.py`, `devops.py` — all eight roles now exist (incl. software_engineer, product_manager)
+- [x] Test: create role-based analysis → runs all 5 evaluators — orchestrator tests + `test_role_based_pipeline_passes_context_and_persists_job_match` + live run
 
 ---
 
@@ -499,10 +430,10 @@
 
 ### M7.1 — Prompt Versioning
 
-- [ ] `app/services/prompt_service.py` — `get_active_prompt(key) -> PromptVersion`
-- [ ] `sync_prompts_to_db()` — On startup, sync prompt files to `prompt_versions` table
-- [ ] Record `prompt_versions_used` in Analysis when creating
-- [ ] Verify: same resume analyzed twice with same prompts → identical results (deterministic portion)
+- [~] `app/services/prompt_service.py` — `get_active_prompt(key) -> PromptVersion` — **intentionally skipped for MVP**: prompts are versioned file constants (`VERSION` in every prompt module); the `prompt_versions` DB table is V2 (per ARCHITECTURE + PROGRESS gotcha 21). Do not "fix" by adding the table.
+- [~] `sync_prompts_to_db()` — On startup, sync prompt files to `prompt_versions` table — same: skipped by design
+- [x] Record `prompt_versions_used` in Analysis when creating — the pipeline records all six prompt versions on every analysis row
+- [x] Verify: same resume analyzed twice with same prompts → identical results (deterministic portion) — `tests/test_ai/test_scoring.py::test_determinism_same_inputs_same_score`; identical prompts recorded in `analyses.prompt_versions_used`
 
 ---
 
@@ -518,36 +449,30 @@
 
 ### M8.1 — Test Setup
 
-- [ ] Create `tests/conftest.py` — event loop fixture, async DB session fixture, `AsyncClient` fixture, auth fixtures (register + login helper)
-- [ ] Create `tests/fixtures/` — `sample.pdf`, `sample.docx`, `sample_image.pdf`, `mock_structured_resume.json`, `mock_evaluator_results.json`
-
-
+- [x] Create `tests/conftest.py` — event loop fixture, async DB session fixture, `AsyncClient` fixture, auth fixtures (register + login helper) — **done, adapted**: real-Postgres per-test transaction rollback (`create_savepoint`), `session_factory`/`db_session`/`client`/`auth_headers`/`email_factory` fixtures; migrations applied by a session fixture
+- [x] Create `tests/fixtures/` — `sample.pdf`, `sample.docx`, `sample_image.pdf`, `mock_structured_resume.json`, `mock_evaluator_results.json` — **done, adapted**: fixtures are generated in code (`docx_bytes_factory`, `pdf_bytes_factory`) and mock payloads live in the test files — no binary fixture files needed
 
 ### M8.2 — Unit Tests
 
-- [ ] `tests/test_document_processing/test_extractor.py` — PDF, DOCX, OCR, quality
-- [ ] `tests/test_scoring/test_score_calculator.py` — Each deterministic check
-- [ ] `tests/test_schemas/test_evaluators.py` — Pydantic validation with valid + invalid data
-- [ ] `tests/test_ai/test_provider.py` — Mock litellm, verify retry + usage tracking
-- [ ] `tests/test_services/test_resume.py` — Upload, extract, CRUD
-- [ ] `tests/test_services/test_analysis.py` — Full pipeline (mocked AI)
-
-
+- [x] `tests/test_document_processing/test_extraction.py` — PDF, DOCX, OCR, quality — OCR portion V2
+- [x] `tests/test_scoring/test_score_calculator.py` — Each deterministic check — **adapted path**: `tests/test_ai/test_scoring.py`
+- [x] `tests/test_schemas/test_evaluators.py` — Pydantic validation with valid + invalid data — **adapted path**: validation coverage inside `tests/test_ai/test_evaluators.py`
+- [x] `tests/test_ai/test_provider.py` — Mock litellm, verify retry + usage tracking
+- [x] `tests/test_services/test_resume.py` — Upload, extract, CRUD — **adapted path**: `tests/test_services/test_storage.py` + `tests/test_api/test_resumes.py`
+- [x] `tests/test_services/test_analysis.py` — Full pipeline (mocked AI)
 
 ### M8.3 — API Tests
 
-- [ ] `tests/test_api/test_auth.py` — Register, login, refresh, invalid credentials
-- [ ] `tests/test_api/test_resumes.py` — Upload, list, get, delete, invalid file type
-- [ ] `tests/test_api/test_analyses.py` — Create, get, status, list
-
-
+- [x] `tests/test_api/test_auth.py` — Register, login, refresh, invalid credentials — plus throttle tests (`test_auth_throttle.py`) and non-blocking-auth tests
+- [x] `tests/test_api/test_resumes.py` — Upload, list, get, delete, invalid file type
+- [x] `tests/test_api/test_analyses.py` — Create, get, status, list
 
 ### M8.4 — Integration Tests
 
-- [ ] `tests/test_integration/test_full_pipeline.py` — Mark `@pytest.mark.integration`
-  - Real resume → real AI calls (use `gpt-4o-mini` to save cost)
+- [x] `tests/test_integration/test_full_pipeline.py` — Mark `@pytest.mark.integration` — **done (2026-10-29)**: opt-in via `RUN_INTEGRATION=1` + `GEMINI_API_KEY`; asserts completed/partial + score bounds + roast length + 5 usage rows
+  - Real resume → real AI calls — models: `gemini-3.5-flash` / `flash-lite`
   - Verify: text extracted → structured resume → evaluators → scores → roast
-- [ ] Only run explicitly: `poetry run pytest -m integration`
+- [x] Only run explicitly: `RUN_INTEGRATION=1 npm test --prefix backend` — skips silently otherwise (1 skipped in normal runs)
 
 ---
 
@@ -577,7 +502,7 @@
 - [x] `src/lib/api-client.ts` — Fetch wrapper: inject JWT header, handle 401 → refresh, base URL from env
 - [x] `src/stores/auth-store.ts` — Zustand: `token`, `user`, `setAuth()`, `clearAuth()` (persist to localStorage)
 - [x] `src/hooks/queries/use-auth.ts` — `useLogin()` mutation, `useRegister()` mutation (`useCurrentUser()` pending backend `/auth/me` contract)
-- [ ] Test: login → token stored → API calls include header → logout clears — backend auth now exists and is curl/pytest verified; the browser walkthrough has not been run
+- [x] Test: login → token stored → API calls include header → logout clears — backend auth curl/pytest verified; **browser walkthrough verified 2026-10-28/29** (login via UI, dashboard guard, logout)
 
 
 
@@ -618,62 +543,52 @@
 
 ### M10.1 — Resume Upload
 
-- [ ] `src/app/upload/page.tsx` — Multi-step wizard: Upload → Configure → Submit
-- [ ] `src/components/upload/ResumeDropzone.tsx` — Drag-and-drop zone, file validation (PDF/DOCX, 10MB), progress indicator
-- [ ] `src/hooks/mutations/use-upload.ts` — `useUploadResume()` mutation
-- [ ] `src/types/resume.ts` — TypeScript types matching backend `ResumeResponse`
-- [ ] Test: upload file → success toast → resume ID stored for next step
-
-
+- [x] `src/app/upload/page.tsx` — Multi-step wizard: Upload → Configure → Submit — **done, adapted (2026-10-29)**: single-step with auto-roast (user decision — confirm-step option was declined); glass dropzone + file chip + gradient CTA + toast hand-off
+- [x] `src/components/upload/ResumeDropzone.tsx` — Drag-and-drop zone, file validation (PDF/DOCX, 10MB), progress indicator — react-dropzone; animated ember border on drag
+- [x] `src/hooks/mutations/use-upload.ts` — `useUploadResume()` mutation
+- [x] `src/types/resume.ts` — TypeScript types matching backend `ResumeResponse` (+ `ResumeListResponse`)
+- [x] Test: upload file → success toast → resume ID stored for next step — curl-verified 201 flow; toast fires on roast start; browser rendering verified (IAB cannot set files)
 
 ### M10.2 — Analysis Configuration
 
-- [ ] `src/components/upload/ModeSelector.tsx` — Radio/tabs: General, Role-Based, JD-Based (disabled for V1?), Custom
-- [ ] `src/components/upload/RoleSelector.tsx` — Shown if role-based: dropdown of roles (Frontend Dev, Backend Dev, etc.)
-- [ ] `src/components/upload/JdInput.tsx` — Shown if JD-based: textarea for job description
-- [ ] `src/components/upload/CustomInstructions.tsx` — Shown if custom: textarea for focus areas
-- [ ] `src/hooks/mutations/use-start-analysis.ts` — `useStartAnalysis()` mutation (POST to `/analyses`)
-- [ ] On submit → redirect to `/analysis/[id]`
-
-
+- [x] `src/components/upload/ModeSelector.tsx` — **done, adapted (2026-10-29)**: inline 4-mode selector on the upload page (glass radio tiles with hints), default General — auto-roast kept, choosing a mode replaces the default
+- [x] `src/components/upload/RoleSelector.tsx` — **adapted**: role dropdown (8 roles) shown for role_based
+- [x] `src/components/upload/JdInput.tsx` — **adapted**: JD textarea (5000-char cap) shown for jd_based
+- [x] `src/components/upload/CustomInstructions.tsx` — **adapted**: focus textarea (500-char cap) shown for custom
+- [ ] `src/hooks/mutations/use-start-analysis.ts` — `useStartAnalysis()` mutation (POST to `/analyses`) — **done**: exists at `src/hooks/mutations/use-start-analysis.ts`
+- [x] On submit → redirect to `/analysis/[id]` — upload success → `POST /analyses` → `router.push(/analysis/[id])`
 
 ### M10.3 — Analysis Result View
 
-- [ ] `src/app/analysis/[id]/page.tsx` — Full roast dashboard
-- [ ] `src/components/analysis/ScoreRing.tsx` — Circular score display (0-100), color-coded
-- [ ] `src/components/analysis/ScoreBreakdown.tsx` — Bar chart or radar chart (recharts) showing sub-scores
-- [ ] `src/components/analysis/FeedbackCard.tsx` — Evaluator summary with expand/collapse
-- [ ] `src/components/analysis/CriticalIssueList.tsx` — Issues with severity badges, improvement suggestions
-- [ ] `src/components/analysis/RoastDisplay.tsx` — Final roast text (markdown-like formatting)
-- [ ] `src/app/analysis/[id]/loading.tsx` — Skeleton loading state
-- [ ] `src/types/analysis.ts` — TypeScript types matching backend `AnalysisResultResponse`
-
-
+- [x] `src/app/analysis/[id]/page.tsx` — Full roast dashboard
+- [x] `src/components/analysis/ScoreRing.tsx` — Circular score display (0-100), color-coded — **adapted path**: `score-ring.tsx` (animated SVG arc)
+- [x] `src/components/analysis/ScoreBreakdown.tsx` — Bar chart or radar chart (recharts) showing sub-scores — **adapted**: `Breakdown` inside `RoastResult.tsx` (animated category bars + deterministic check list; radar chart not needed)
+- [x] `src/components/analysis/FeedbackCard.tsx` — Evaluator summary with expand/collapse — **adapted**: "Expert verdicts" grid in `RoastResult.tsx`
+- [x] `src/components/analysis/CriticalIssueList.tsx` — Issues with severity badges, improvement suggestions — **adapted**: `FindingsList` (critical/warnings/fix-these) in `RoastResult.tsx`
+- [x] `src/components/analysis/RoastDisplay.tsx` — Final roast text (markdown-like formatting) — **adapted**: ember glass roast card in `RoastResult.tsx`
+- [x] `src/app/analysis/[id]/loading.tsx` — Skeleton loading state — **adapted**: in-page skeleton branch (no separate loading.tsx)
+- [x] `src/types/analysis.ts` — TypeScript types matching backend `AnalysisResultResponse`
 
 ### M10.4 — Streaming Display
 
-- [ ] `src/hooks/use-sse.ts` — Custom hook consuming SSE from `/analyses/{id}/stream`
-- [ ] `src/components/analysis/StreamingStatus.tsx` — Pipeline step progress (Extracting → Parsing → Evaluating → Scoring → Composing → Done)
-- [ ] Show animated progress bar with step labels
-- [ ] On `complete` event → refetch full analysis result, show results
-
-
+- [x] `src/hooks/use-analysis-stream.ts` — Custom hook consuming SSE from `/analyses/{id}/stream` — **done (2026-10-29)**: fetch-based stream reader (EventSource cannot send JWT headers), parses status/complete/error events, aborts cleanly; wired into the result page with polling as automatic fallback (`useAnalysis(id, { poll: !streamActive })`)
+- [x] `src/components/analysis/StreamingStatus.tsx` — Pipeline step progress (Extracting → Parsing → Evaluating → Scoring → Composing → Done) — **adapted**: `StageProgress.tsx` (animated flame, spring ember progress bar, per-stage check/spinner)
+- [x] Show animated progress bar with step labels
+- [x] On `complete` event → refetch full analysis result, show results — polling refetches and the page transitions without reload (browser-verified)
 
 ### M10.5 — Analysis History
 
-- [ ] `src/app/dashboard/page.tsx` — Table/card list of all analyses
-- [ ] Status badges: Queued, Processing, Complete, Failed
-- [ ] Quick view: resume name, mode, score, date
-- [ ] Click → navigate to `/analysis/[id]`
-
-
+- [x] `src/app/dashboard/page.tsx` — Table/card list of all analyses — **done, adapted**: Overview bento (stats + latest roast + recent roasts) and a dedicated `/history` page with Roasts/Resumes tabs
+- [x] Status badges: Queued, Processing, Complete, Failed — lowercase statuses matching the backend (queued/…/completed/partial/failed)
+- [x] Quick view: resume name, mode, score, date — `AnalysisCard` (mode, score ring, status, date)
+- [x] Click → navigate to `/analysis/[id]`
 
 ### M10.6 — Error & Empty States
 
-- [ ] `src/components/shared/ErrorState.tsx` — Retry button, error message
-- [ ] `src/components/shared/EmptyState.tsx` — No analyses yet, CTA to upload
-- [ ] `src/components/shared/Loader.tsx` — Full-page or inline loader
-- [ ] Toast notifications for success/error via `sonner`
+- [x] `src/components/shared/ErrorState.tsx` — Retry button, error message
+- [x] `src/components/shared/EmptyState.tsx` — No analyses yet, CTA to upload
+- [~] `src/components/shared/Loader.tsx` — Full-page or inline loader — **adapted**: skeleton branches + `StageProgress` cover loading; no separate Loader component
+- [x] Toast notifications for success/error via `sonner` — Toaster mounted; roast-start toast live
 
 ---
 

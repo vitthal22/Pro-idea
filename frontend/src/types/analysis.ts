@@ -55,6 +55,16 @@ export interface ScoringBreakdown {
   ai_score: number;
 }
 
+/** Job Matcher output — only present for role_based/jd_based analyses. */
+export interface JobMatchFeedback {
+  summary: string;
+  match_rating: string;
+  matched_skills: string[];
+  missing_skills: string[];
+  alignment_findings: string[];
+  recommendations: string[];
+}
+
 /** The roast itself — mirrors backend AnalysisResultPayload. */
 export interface AnalysisResultPayload {
   overall_score: number | null;
@@ -65,6 +75,7 @@ export interface AnalysisResultPayload {
   final_roast: string | null;
   breakdown: ScoringBreakdown | null;
   methodology: Record<string, unknown> | null;
+  job_match_feedback: JobMatchFeedback | null;
   evaluator_summaries: Record<string, string>;
   failed_evaluators: string[];
   roast_fallback_used: boolean;
