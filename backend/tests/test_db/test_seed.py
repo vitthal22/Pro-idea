@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.common.security import verify_password
 from app.config import settings
 from app.db import seed
-from app.models.user import UserModel
+from app.models.user import TIER_DEMO, UserModel
 from app.services.user_repository import PostgresUserRepository
 
 PASSWORD = "SeedPass123"
@@ -51,8 +51,28 @@ async def test_seed_creates_demo_user_with_hashed_password(
 
     assert user is not None
     assert user.name == "Seeded Demo"
+    assert user.tier == TIER_DEMO
     assert user.password_hash != PASSWORD
     assert verify_password(PASSWORD, user.password_hash)
+
+
+async def test_seed_upgrades_existing_demo_user_to_demo_tier(
+    demo_email: str,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Accounts seeded before the demo tier existed get reconciled."""
+    async with session_factory() as session:
+        await PostgresUserRepository(session).create(
+            email=demo_email, name="Old Demo", password_hash="hash"
+        )
+
+    await seed.seed_demo_user()
+
+    async with session_factory() as session:
+        user = await PostgresUserRepository(session).get_by_email(demo_email)
+
+    assert user is not None
+    assert user.tier == TIER_DEMO
 
 
 async def test_seed_is_idempotent(

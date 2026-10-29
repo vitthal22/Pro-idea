@@ -7,6 +7,13 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ResumeDropzone } from "@/components/upload/ResumeDropzone";
@@ -142,7 +149,7 @@ export default function UploadPage() {
   const busy = upload.isPending || startAnalysis.isPending;
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div>
       <PageHeader
         title="Upload Resume"
         description="Pick how hard to roast, drop the file — the experts start automatically."
@@ -209,19 +216,18 @@ export default function UploadPage() {
             <Label htmlFor="target-role" className="mb-2 block">
               Target role
             </Label>
-            <select
-              id="target-role"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-              disabled={busy}
-              className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            >
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role.value} value={role.value}>
-                  {role.label}
-                </option>
-              ))}
-            </select>
+            <Select value={targetRole} onValueChange={setTargetRole} disabled={busy}>
+              <SelectTrigger id="target-role" className="w-full">
+                <SelectValue placeholder="Pick a role" />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((role) => (
+                  <SelectItem key={role.value} value={role.value}>
+                    {role.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="mt-1 text-xs text-muted-foreground">
               Adds a fifth expert: the Job Matcher, weighted hardest.
             </p>

@@ -74,11 +74,22 @@ class AnalysisResultPayload(BaseModel):
     job_match_feedback: dict[str, Any] | None = Field(
         description="Job Matcher output (role_based/jd_based modes only)"
     )
+    reality_check: dict[str, Any] | None = Field(
+        description="Structured 2026 Hiring Panel verdict (v2 composer) — "
+        "headline, five-second impression, poison points, market analysis"
+    )
     evaluator_summaries: dict[str, str]
     failed_evaluators: list[str]
     roast_fallback_used: bool = Field(
         description="True when the narrative roast used the deterministic template"
     )
+
+
+class ScoreVerdict(BaseModel):
+    """Blunt score verdict shown on the scorecard."""
+
+    label: str = Field(description="e.g. 'Needs work', 'Instant-reject pile'")
+    line: str = Field(description="One-line explanation of the verdict")
 
 
 class AnalysisDetailResponse(BaseModel):
@@ -92,4 +103,5 @@ class AnalysisDetailResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     processing_time_ms: int | None
+    score_verdict: ScoreVerdict | None
     result: AnalysisResultPayload | None

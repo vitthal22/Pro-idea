@@ -27,13 +27,54 @@ from app.schemas.resume import StructuredResume
 
 # AI rating → deterministic midpoint of its score band (ARCHITECTURE §13:
 # excellent 88-100, good 70-87, fair 45-69, poor 20-44, missing 0-19).
+# AI rating → deterministic midpoint of its score band. v2 (2026-10-30)
+# recalibrated to the 2026 hiring bar — the reference market scorecard:
+# excellent 88, good 72, fair 50, poor 26, missing 5 (was 94/78.5/57/32/9.5,
+# which let competent-but-generic resumes score in the high 70s).
 _RATING_MIDPOINT: dict[str, float] = {
-    "excellent": 94.0,
-    "good": 78.5,
-    "fair": 57.0,
-    "poor": 32.0,
-    "missing": 9.5,
+    "excellent": 88.0,
+    "good": 72.0,
+    "fair": 50.0,
+    "poor": 26.0,
+    "missing": 5.0,
 }
+
+# Score → the blunt verdict label shown on the scorecard.
+_VERDICT_BANDS: list[tuple[float, str, str]] = [
+    (
+        80.0,
+        "Interview-ready",
+        "Strong by 2026 standards — the remaining gaps are fixable polish.",
+    ),
+    (
+        65.0,
+        "Needs work",
+        "Real signals, but critical gaps will cost you interviews — fix the "
+        "poison points first.",
+    ),
+    (
+        45.0,
+        "Will get screened out",
+        "Generic and under-evidenced; automated filters and six-second "
+        "scans will pass on this.",
+    ),
+    (
+        0.0,
+        "Instant-reject pile",
+        "This reads as AI-generated filler with no verifiable specifics — "
+        "rebuild before sending.",
+    ),
+]
+
+
+def score_verdict(score: float) -> dict[str, str]:
+    """Blunt verdict label + one-line explanation for a 0-100 score."""
+    for threshold, label, line in _VERDICT_BANDS:
+        if score >= threshold:
+            return {"label": label, "line": line}
+    label, line = _VERDICT_BANDS[-1][1], _VERDICT_BANDS[-1][2]
+    return {"label": label, "line": line}
+
 
 # First impression (strong/average/weak) stands in for the general mode's
 # role-relevance category when the Job Matcher did not run.

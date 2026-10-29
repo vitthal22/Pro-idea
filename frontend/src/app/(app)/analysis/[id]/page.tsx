@@ -71,7 +71,7 @@ export default function AnalysisPage({
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 py-4">
+      <div className="space-y-4">
         <Skeleton className="h-28 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-2xl" />
@@ -94,14 +94,18 @@ export default function AnalysisPage({
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       {running && <StageProgress status={data.status} />}
 
-      {!running && data.status === "failed" && (
+      {!running && (data.status === "failed" || data.status === "partial") && (
         <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center">
-          <h2 className="text-xl font-semibold">The roast burned</h2>
+          <h2 className="text-xl font-semibold">
+            {data.status === "failed" ? "The roast burned" : "The roast didn't finish"}
+          </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {data.error_message ?? "The pipeline failed unexpectedly."}
+            {data.status === "failed"
+              ? (data.error_message ?? "The pipeline failed unexpectedly.")
+              : "One of the experts didn't respond, so the report came back incomplete. Run the roast again for the full review."}
           </p>
           {startError && (
             <p className="mt-2 text-sm text-destructive">{startError}</p>
@@ -112,7 +116,15 @@ export default function AnalysisPage({
         </div>
       )}
 
-      {!running && data.status !== "failed" && data.result && (
+      {!running && data.status === "completed" && !data.result && (
+        <ErrorState
+          title="This roast has no report"
+          description="The analysis finished but its report didn't load. Try refreshing."
+          onRetry={() => refetch()}
+        />
+      )}
+
+      {!running && data.status === "completed" && data.result && (
         <>
           <PageHeader
             title="Your roast"
@@ -125,7 +137,7 @@ export default function AnalysisPage({
               </Button>
             }
           />
-          <RoastResult status={data.status} result={data.result} />
+          <RoastResult result={data.result} verdict={data.score_verdict} />
         </>
       )}
     </div>

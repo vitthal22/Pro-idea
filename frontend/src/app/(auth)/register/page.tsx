@@ -23,7 +23,7 @@ export default function RegisterPage() {
         </span>
         Resume Roaster
       </Link>
-      <div className="glass-card relative mx-auto w-fit rounded-2xl p-1">
+      <div className="glass-card relative mx-auto w-full max-w-sm rounded-2xl p-1">
         <RegisterForm />
       </div>
     </div>

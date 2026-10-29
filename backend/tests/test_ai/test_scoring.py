@@ -69,9 +69,9 @@ def test_rating_maps_to_fixed_bands() -> None:
     result = calculate_scores(_STRONG_RESUME, _RAW_TEXT, _ALL_OUTPUTS, [])
 
     ratings = {c.category: c.score for c in result.ai_categories}
-    assert ratings["skills_alignment"] == 94.0  # technical depth: excellent
-    assert ratings["experience"] == 78.5  # good
-    assert ratings["role_relevance"] == 94.0  # strong → excellent band
+    assert ratings["skills_alignment"] == 88.0  # technical depth: excellent
+    assert ratings["experience"] == 72.0  # good
+    assert ratings["role_relevance"] == 88.0  # strong → excellent band
     assert set(ratings) == set(MODE_WEIGHTS["general"])
 
 
@@ -89,7 +89,7 @@ def test_job_matcher_drives_role_relevance_when_present() -> None:
 
     relevance = {c.category: c for c in result.ai_categories}["role_relevance"]
     assert relevance.rating == "excellent"
-    assert relevance.score == 94.0
+    assert relevance.score == 88.0
     assert "job_matcher.match_rating" in relevance.details
     # role_based weights apply
     assert result.methodology["mode_weights"] == MODE_WEIGHTS["role_based"]

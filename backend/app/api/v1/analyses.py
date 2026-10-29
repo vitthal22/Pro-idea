@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.ai.scoring import score_verdict
 from app.api.deps import get_analysis_service, get_current_user, get_db
 from app.api.schemas.analyses import (
     AnalysisCreatedResponse,
@@ -26,6 +27,7 @@ from app.api.schemas.analyses import (
     AnalysisListResponse,
     AnalysisResultPayload,
     AnalysisStatusResponse,
+    ScoreVerdict,
 )
 from app.models.analysis import AnalysisModel, AnalysisResultModel
 from app.services.analysis import AnalysisService
@@ -55,6 +57,7 @@ def _result_payload(result: AnalysisResultModel | None) -> AnalysisResultPayload
         breakdown=result.scoring_breakdown,
         methodology=result.scoring_methodology,
         job_match_feedback=result.job_match_feedback,
+        reality_check=report.get("reality_check"),
         evaluator_summaries=report.get("evaluator_summaries", {}),
         failed_evaluators=report.get("failed_evaluators", []),
         roast_fallback_used=bool(report.get("roast_fallback_used", False)),
@@ -225,5 +228,17 @@ async def get_analysis(
         created_at=analysis.created_at,
         completed_at=analysis.completed_at,
         processing_time_ms=analysis.processing_time_ms,
+        score_verdict=(
+            ScoreVerdict(
+                **score_verdict(
+                    float(analysis.result.overall_score)
+                    if analysis.result is not None
+                    and analysis.result.overall_score is not None
+                    else 0.0
+                )
+            )
+            if analysis.result is not None and analysis.result.overall_score is not None
+            else None
+        ),
         result=_result_payload(analysis.result),
     )

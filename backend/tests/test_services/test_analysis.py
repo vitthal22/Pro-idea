@@ -13,6 +13,7 @@ from app.ai.provider import AIResult
 from app.models.analysis import AnalysisModel, AnalysisResultModel
 from app.models.analysis_usage import AnalysisUsageModel
 from app.models.resume import ResumeModel
+from app.models.user import TIER_DEMO
 from app.schemas.evaluators import (
     ATSEvaluatorOutput,
     ContentQualityEvaluatorOutput,
@@ -20,6 +21,7 @@ from app.schemas.evaluators import (
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
+from app.schemas.report import RoastReport
 from app.schemas.resume import StructuredResume
 from app.services import analysis as analysis_module
 from app.services.analysis import AnalysisService, _execute_pipeline
@@ -110,10 +112,41 @@ def _patch_ai(
             usage=[_usage() for _ in outputs],
         )
 
+    def _mock_report(roast_text: str) -> RoastReport:
+        from app.schemas.report import MarketVerdict
+
+        return RoastReport(
+            headline_verdict="Generic resume, generic outcome.",
+            verdict_summary="It will not survive a 2026 screening stack.",
+            five_second_impression='"Pass — nothing verifiable here."',
+            poison_points=["No quantified system-scale metrics."],
+            market_analysis=[
+                MarketVerdict(
+                    market="Product Tech & Tier-1",
+                    verdict="high rejection risk",
+                    analysis="No scale, no ownership evidence.",
+                    missing_signals=[],
+                ),
+                MarketVerdict(
+                    market="Service & Consulting",
+                    verdict="high rejection risk",
+                    analysis="No client-ready signals.",
+                    missing_signals=[],
+                ),
+                MarketVerdict(
+                    market="2026 AI-Era Market",
+                    verdict="high rejection risk",
+                    analysis="No eval or cost metrics.",
+                    missing_signals=[],
+                ),
+            ],
+            roast=roast_text,
+        )
+
     async def fake_compose_roast(aggregated, scoring, custom_instructions=None):
         if captured is not None:
             captured["custom_instructions"] = custom_instructions
-        return roast, roast_fallback, _usage()
+        return _mock_report(roast), roast_fallback, _usage()
 
     monkeypatch.setattr(analysis_module, "parse_resume", fake_parse_resume)
     monkeypatch.setattr(analysis_module, "run_evaluations", fake_run_evaluations)
@@ -191,6 +224,10 @@ async def test_pipeline_success_persists_result_and_usage(
     )
     assert result is not None
     assert result.final_roast == "Your resume needs work, and here is why."
+    reality = (result.final_report or {}).get("reality_check") or {}
+    assert reality.get("headline_verdict")
+    assert reality.get("five_second_impression")
+    assert len(reality.get("market_analysis") or []) == 3
     assert result.overall_score is not None
     assert result.recruiter_feedback is not None
     assert result.critical_issues is not None
@@ -540,3 +577,35 @@ async def test_role_based_pipeline_uses_role_based_weights(
     assert result is not None
     stored = (result.scoring_methodology or {})["mode_weights"]
     assert stored["role_relevance"] == 0.25  # role_based table, not general's 0.15
+
+
+async def test_demo_tier_bypasses_daily_cap(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    """The demo tier is the walkthrough baseline — uncapped even at limit 0."""
+    _patch_ai(monkeypatch)
+    service = AnalysisService(db_session)
+    user = await PostgresUserRepository(db_session).create(
+        email=email_factory("demo"),
+        name="Demo User",
+        password_hash="hash",
+        tier=TIER_DEMO,
+    )
+    resume = ResumeModel(
+        user_id=user.id,
+        file_path=f"{user.id}/demo.docx",
+        original_name="demo.docx",
+        file_size=100,
+        mime_type=DOCX_MIME,
+        raw_text="some text",
+    )
+    db_session.add(resume)
+    await db_session.flush()
+
+    monkeypatch.setattr(analysis_module.settings, "rate_limit_free", 0)
+
+    for _ in range(3):
+        analysis = await service.create_analysis(
+            user_id=user.id, resume_id=resume.id, tier=TIER_DEMO, schedule=False
+        )
+        assert analysis.status == "queued"

@@ -51,6 +51,7 @@ from app.db.session import get_session_factory
 from app.models.analysis import AnalysisModel, AnalysisResultModel
 from app.models.analysis_usage import AnalysisUsageModel
 from app.models.resume import ResumeModel
+from app.models.user import TIER_DEMO
 
 logger = logging.getLogger("app.services.analysis")
 
@@ -73,7 +74,13 @@ def _tier_daily_limit(tier: str) -> int:
 
 
 async def _enforce_daily_cap(session: AsyncSession, user_id: UUID, tier: str) -> None:
-    """Reject analyses beyond the tier's configured per-day limit."""
+    """Reject analyses beyond the tier's configured per-day limit.
+
+    The demo tier is the walkthrough baseline and is exempt: the demo
+    account exists to try the product without a budget.
+    """
+    if tier == TIER_DEMO:
+        return
     start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     used = await session.scalar(
         select(func.count())
@@ -272,13 +279,13 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
         )
 
         await _set_stage(session, analysis, "composing")
-        roast, roast_fallback, composer_usage = await compose_roast(
+        report, roast_fallback, composer_usage = await compose_roast(
             aggregated, scoring, custom_instructions=analysis.custom_instructions
         )
 
         session.add(
             _result_row(
-                analysis.id, evaluations, aggregated, scoring, roast, roast_fallback
+                analysis.id, evaluations, aggregated, scoring, report, roast_fallback
             )
         )
         for usage in [*evaluations.usage, composer_usage]:
@@ -343,7 +350,7 @@ def _result_row(
     evaluations: Any,
     aggregated: Any,
     scoring: Any,
-    roast: str,
+    report: Any,
     roast_fallback: bool,
 ) -> AnalysisResultModel:
     """Map pipeline outputs onto the denormalized ``analysis_results`` row."""
@@ -368,10 +375,11 @@ def _result_row(
             "ai_score": scoring.ai_score,
         },
         scoring_methodology=scoring.methodology,
-        final_roast=roast,
+        final_roast=report.roast,
         final_report={
             "evaluator_summaries": aggregated.evaluator_summaries,
             "failed_evaluators": aggregated.failed_evaluators,
             "roast_fallback_used": roast_fallback,
+            "reality_check": report.model_dump(),
         },
     )

@@ -4,29 +4,17 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 
 import { ScoreRing } from "@/components/analysis/score-ring";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { AnalysisListItem, AnalysisStatus } from "@/types/analysis";
-
-const STATUS_VARIANTS: Record<
-  AnalysisStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  queued: "secondary",
-  extracting: "secondary",
-  parsing: "secondary",
-  evaluating: "secondary",
-  scoring: "secondary",
-  composing: "secondary",
-  completed: "default",
-  partial: "outline",
-  failed: "destructive",
-};
+import {
+  isRunningStatus,
+  type AnalysisListItem,
+} from "@/types/analysis";
 
 const MODE_LABELS: Record<AnalysisListItem["analysis_type"], string> = {
   general: "General",
@@ -41,6 +29,7 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
     month: "short",
     day: "numeric",
   });
+  const running = isRunningStatus(analysis.status);
 
   return (
     <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
@@ -60,11 +49,11 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
                 <CardTitle className="text-base">
                   {MODE_LABELS[analysis.analysis_type]} analysis
                 </CardTitle>
-                <CardDescription>Created {created}</CardDescription>
+                <CardDescription>
+                  {running ? "Roasting now — tap to watch live" : `Created ${created}`}
+                </CardDescription>
               </div>
-              <Badge variant={STATUS_VARIANTS[analysis.status]}>
-                {analysis.status}
-              </Badge>
+              <StatusBadge status={analysis.status} />
             </div>
           </CardHeader>
         </Card>

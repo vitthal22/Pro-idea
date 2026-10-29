@@ -1,31 +1,26 @@
-# UI Overhaul Plan — "Ember" design system, dark-first, full navigation
+# Plan: "2026 Hiring Panel" — brutal prompt v2, score recalibration, scorecard UI
 
-**Grounding from research:** dark-first + bento grids + subtle glass/liquid-glass surfaces are the dominant 2025–26 AI-SaaS look (Linear/Vercel-style radial glow); Tailwind v4 needs `@theme inline` tokens + `@custom-variant dark` (already present); `next-themes` is installed but never wired; the current palette is default shadcn grayscale — hence "plain". **Locked choices:** ember/fire-orange accent, dark by default with light/dark toggle, auto-roast kept but polished. **No backend changes needed** — analytics computes client-side from existing endpoints.
+**Grounding:** 2026 market research — 80% of hiring managers can spot AI-written resumes; the reject signals are exactly generic praise/buzzword stuffing; the winners' vocabulary is verifiable specificity (P99/SLIs, eval pass rates, cost-per-inference, RAGAS/LangSmith, incident retros). The reference screenshots map to data we can produce with ONE structured composer call. No DB migration needed (final_report is JSONB). **Locked:** "2026 Hiring Panel" persona; calibration excellent=88 / good=72 / fair=50 / poor=26 / missing=5.
 
-## Phase 1 — Design foundation + consistent app shell (the consistency fix)
-1. Install `framer-motion`; add shadcn `sheet` + `chart` components via CLI.
-2. **`globals.css` rewrite — the "Ember" token system**: dark-first warm-tinted surfaces (layered elevation instead of harsh borders), ember primary (`oklch` orange) + ember→amber gradients, full chart palette (ember/amber/teal/violet/rose), light theme = warm paper + same ember, glow/shimmer keyframes.
-3. **Theme wiring**: `ThemeProvider` (next-themes, `attribute="class"`, `defaultTheme="dark"`) in root layout + `suppressHydrationWarning`; `ThemeToggle` (sun/moon) component.
-4. **AppShell + route group**: move `dashboard, history, analytics, upload, profile, analysis/[id]` under one `(app)` route group whose layout = auth guard + proper flex shell (fixed sidebar + `main`) — kills the top-gap quirk everywhere. Old `dashboard/layout.tsx` absorbed.
-5. **New Sidebar**: brand (flame + wordmark), nav = Overview / Roasts (history) / Analytics, big ember **"New roast"** CTA, then Profile, ThemeToggle, user card + logout. Mobile: hamburger → shadcn Sheet. Shared `PageHeader` (title + description + actions) used by every page.
+## Phase 1 — Prompt overhaul v2.0.0
+1. **Evaluator prompts v2** (recruiter, ats, technical, content_quality, job_matcher — all `VERSION = "2.0.0"`): add the hiring-panel persona (20-year principal recruiter, has read 10k+ resumes through the AI-slop era), **calibration anchors** ("excellent = top-decile: quantified system-scale impact (P99/SLIs, eval pass rates, cost/token savings); good = concrete specifics with some metrics; fair = competent but generic duties; poor = buzzword-only claims; **when torn between two ratings, pick the harsher one**"), and 2026-market red flags (AI-generic phrasing, stack-stuffing without scale, no eval/telemetry/cost signals on AI-era claims).
+2. **Composer v2 → structured `RoastReport`** (new schema, `response_model=`): `headline_verdict` (one punchy line, e.g. "Junior task-executor posing as an AI engineer"), `verdict_summary`, `five_second_impression` (first-person recruiter quote — why you get passed over), `poison_points[]` (fatal flaws, ≤1 sentence each), `market_analysis[]` (exactly 3: "Product Tech & Tier-1", "Service & Consulting", "2026 AI-Era Market"; each `{ verdict, analysis, missing_signals[] }`), and `roast` (the narrative prose — kept). Same single AI call, bigger schema. Deterministic fallback template extended to fill every field. Prompt version bumped; JSONB stores it — **no migration**.
 
-## Phase 2 — Overview (dashboard bento) + Roasts (history)
-- `/dashboard` becomes a **bento overview**: stat tiles (roasts count, avg score, best score, resumes), latest roast card with score ring, streak/recent activity, prominent "New roast" tile. Staggered fade-in animations.
-- `/history`: full roast list (AnalysisCard restyled: score ring chip, animated status badges) + uploaded resumes in a tab; `AnalysisCard` links stay `/analysis/[id]`.
-- Empty states upgraded (ember icon, CTA); toast notifications on actions (sonner, already installed).
+## Phase 2 — Score recalibration + verdict labels
+3. `_RATING_MIDPOINT` → excellent 88 / good 72 / fair 50 / poor 26 / missing 5 (determinism preserved; tests updated to new bands).
+4. Score **verdict labels** (new helper, exposed in API + UI): ≥80 "Interview-ready", 65–79 "Needs work", 45–64 "Will get screened out", <45 "Instant-reject pile" + one-line explanation (feeds the scorecard subtitle like the reference's "Needs Work / Moderate ATS compatibility…").
 
-## Phase 3 — Upload + roast experience + result (the polish)
-- **Upload**: glass dropzone (animated ember dashed border on drag), file chip with size, gradient CTA "Upload & roast". Auto-roast stays — but the transition becomes an animated hand-off (button morph → ember sweep).
-- **`/analysis/[id]` progress**: full "roast experience" — animated ember flame loader, stage checklist with per-stage transitions and a moving ember progress bar, pulsing glow card. Feels like a destination, not a teleport.
-- **Result**: animated **score ring** (SVG stroke animation counting up), gradient roast card (ember-tinted glass), findings as bento cards with per-item fade-in, category bars animating on load, styled partial banner. Restyles existing `RoastResult`/`StageProgress`.
+## Phase 3 — Backend plumbing
+5. `RoastReport` schema in `app/schemas/report.py`; pipeline stores it in `final_report` (alongside existing keys); `AnalysisDetailResponse` gains `reality_check: RoastReport | None`; legacy analyses without it render the old layout gracefully.
+6. Scorecard payload: `score_verdict` (label + line) added to the detail response; category cards computed frontend-side from existing `breakdown` (ATS ← ats_compatibility, Impact & Language ← content_quality, Completeness ← deterministic section_completeness %, Job Match ← job_match or "locked" when absent).
 
-## Phase 4 — Landing page (Linear-style dark hero)
-- Sticky glass navbar; hero with radial ember glow + gradient headline + CTAs; CSS-built product mock (score ring + roast snippet); features bento (4 expert evaluators / hybrid scoring / brutal-but-constructive / private by design); 3-step "how it works"; final CTA + footer. Scroll-reveal animations via framer-motion. Auth pages get matching glass-card treatment.
+## Phase 4 — Result page redesign (reference layout, Ember theme)
+7. **Scorecard header**: ring (animated, unchanged) + 4 weighted category cards (weight %, score, mini progress bar; Job Match shows "— / 100, Paste a job description to unlock" when absent) + verdict label + benchmark line ("Benchmark: senior engineering cohort, 2026 market").
+8. **Unfiltered Recruiter Reality Check** section: flame mark + "Zero-Sugarcoating" badge, `headline_verdict` as the section H2, verdict summary paragraph, **5-Second Recruiter First Impression** quote block, **Fatal Application Poison Points** (red ✕ items), **Rejection Probability Across 3 Markets** cards (verdict chip color-coded + analysis + MISSING SIGNALS chips). Existing roast card, findings, breakdown, expert verdicts stay below.
+9. Upload page copy mentions the harsher panel ("Zero sugarcoating by default").
 
-## Phase 5 — Analytics page (new, your missing page)
-- `/analytics`, client-computed from `GET /analyses` + `/resumes`: 4 stat tiles, **score trend** area chart (recharts via shadcn ChartContainer, ember palette), **score distribution** bar chart, recent activity feed, per-mode split. Empty state when no roasts yet.
+## Phase 5 — Verification
+10. Tests: composer v2 schema (mocked, incl. fallback filling every field), calibration values, API field. Full backend chain + frontend build.
+11. **Live before/after**: run the SAME resume (your vitthal gupta resume.pdf) — old score 77 vs new run; screenshot old layout memory vs new scorecard + reality check; confirm the score lands meaningfully lower and the verdicts read like the reference. Sync `PROJECT_PLAN.md` + `PROGRESS.md`. No commits.
 
-## Phase 6 — Verification
-- `tsc` / eslint / `next build` green; browser walkthrough with screenshots of every page in **both themes** (desktop + one mobile width); fix what looks off; update `PROGRESS.md`. No commits.
-
-**References:** [SaaS design trends 2026](https://toimi.pro/blog/best-saas-website-designs), [Bento grids guide](https://www.saasframe.io/blog/designing-bento-grids-that-actually-work-a-2026-practical-guide), [AI-first SaaS design](https://www.outcrowd.io/blog/2026-design-trends-for-ai-first-saas-products), [Dark theming UX patterns](https://www.saasui.design/blog/saas-dark-mode-theming-ux-patterns), [shadcn dark mode](https://ui.shadcn.com/docs/dark-mode/next), [Tailwind v4 theming](https://ui.shadcn.com/docs/tailwind-v4), [AI startup aesthetic analysis](https://www.setproduct.com/blog/why-every-ai-startup-looks-the-same), [Dark SaaS analytics refs](https://dribbble.com/shots/27428790-Dark-SaaS-Analytics-Dashboard-Revenue-Orders-Conversion).
+**Honest expectation-setting:** prompts change tone and calibration — measured via the live before/after run; the structural harshness comes from the recalibrated bands, which is deterministic.

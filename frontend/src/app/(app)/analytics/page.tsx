@@ -15,9 +15,10 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { useAnalyses } from "@/hooks/queries/use-analyses";
 import { useResumes } from "@/hooks/queries/use-resumes";
-import type { AnalysisListItem } from "@/types/analysis";
+import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
 const trendConfig = {
   score: { label: "Score", color: "var(--chart-1)" },
@@ -63,34 +64,38 @@ function ActivityFeed({ items }: { items: AnalysisListItem[] }) {
   const recent = items.slice(0, 6);
   return (
     <ul className="space-y-3">
-      {recent.map((item) => (
-        <li key={item.id} className="flex items-center gap-3 text-sm">
-          {item.overall_score !== null ? (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-xs font-bold text-primary">
-              {Math.round(item.overall_score)}
-            </span>
-          ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <History className="size-4" />
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate">
-            {item.status === "completed" || item.status === "partial" ? (
-              <Link
-                href={`/analysis/${item.id}`}
-                className="hover:text-primary hover:underline"
-              >
-                {item.analysis_type.replace("_", " ")} analysis
-              </Link>
+      {recent.map((item) => {
+        const running = isRunningStatus(item.status);
+        return (
+          <li key={item.id} className="flex items-center gap-3 text-sm">
+            {item.overall_score !== null ? (
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-xs font-bold text-primary">
+                {Math.round(item.overall_score)}
+              </span>
             ) : (
-              <span>{item.analysis_type.replace("_", " ")} analysis</span>
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <History className="size-4" />
+              </span>
             )}
-          </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {shortDate(item.created_at)}
-          </span>
-        </li>
-      ))}
+            <span className="min-w-0 flex-1 truncate">
+              {running ? (
+                <span>{item.analysis_type.replace("_", " ")} analysis</span>
+              ) : (
+                <Link
+                  href={`/analysis/${item.id}`}
+                  className="hover:text-primary hover:underline"
+                >
+                  {item.analysis_type.replace("_", " ")} analysis
+                </Link>
+              )}
+            </span>
+            {item.status !== "completed" && <StatusBadge status={item.status} />}
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {shortDate(item.created_at)}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -101,7 +106,7 @@ export default function AnalyticsPage() {
 
   if (roasts.isPending || resumes.isPending) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4">
+      <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -132,7 +137,7 @@ export default function AnalyticsPage() {
 
   if (roasts.data?.total === 0) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div>
         <PageHeader
           title="Analytics"
           description="What the experts have said about your resumes so far."
@@ -157,7 +162,7 @@ export default function AnalyticsPage() {
   const failedCount = items.filter((item) => item.status === "failed").length;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="space-y-4">
       <PageHeader
         title="Analytics"
         description="What the experts have said about your resumes so far."

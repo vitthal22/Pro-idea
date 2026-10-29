@@ -65,6 +65,34 @@ export interface JobMatchFeedback {
   recommendations: string[];
 }
 
+/** One hiring-market verdict from the 2026 Hiring Panel composer. */
+export interface MarketVerdict {
+  market: "Product Tech & Tier-1" | "Service & Consulting" | "2026 AI-Era Market";
+  verdict:
+    | "strong fit"
+    | "billable fit with caveats"
+    | "borderline / screen fail"
+    | "high rejection risk";
+  analysis: string;
+  missing_signals: string[];
+}
+
+/** Structured "Unfiltered Recruiter Reality Check" (composer v2). */
+export interface RealityCheck {
+  headline_verdict: string;
+  verdict_summary: string;
+  five_second_impression: string;
+  poison_points: string[];
+  market_analysis: MarketVerdict[];
+  roast: string;
+}
+
+/** Blunt score verdict shown on the scorecard. */
+export interface ScoreVerdict {
+  label: string;
+  line: string;
+}
+
 /** The roast itself — mirrors backend AnalysisResultPayload. */
 export interface AnalysisResultPayload {
   overall_score: number | null;
@@ -76,6 +104,7 @@ export interface AnalysisResultPayload {
   breakdown: ScoringBreakdown | null;
   methodology: Record<string, unknown> | null;
   job_match_feedback: JobMatchFeedback | null;
+  reality_check: RealityCheck | null;
   evaluator_summaries: Record<string, string>;
   failed_evaluators: string[];
   roast_fallback_used: boolean;
@@ -91,6 +120,7 @@ export interface AnalysisDetail {
   created_at: string;
   completed_at: string | null;
   processing_time_ms: number | null;
+  score_verdict: ScoreVerdict | null;
   result: AnalysisResultPayload | null;
 }
 

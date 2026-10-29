@@ -11,12 +11,12 @@ import { ResumeRow } from "@/components/resumes/resume-row";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { StatTile } from "@/components/shared/stat-tile";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalyses } from "@/hooks/queries/use-analyses";
 import { useResumes } from "@/hooks/queries/use-resumes";
-import type { AnalysisListItem } from "@/types/analysis";
+import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
 const stagger: Variants = {
   hidden: {},
@@ -48,14 +48,18 @@ function LatestRoastCard({ roast }: { roast: AnalysisListItem }) {
           <p className="mt-0.5 font-semibold">
             {MODE_LABELS[roast.analysis_type]} analysis
           </p>
-          <Badge variant="outline" className="mt-2">
-            {roast.status}
-          </Badge>
+          <span className="mt-2 inline-block">
+            <StatusBadge status={roast.status} />
+          </span>
         </div>
       </div>
       <Button asChild variant="outline" className="shrink-0">
         <Link href={`/analysis/${roast.id}`}>
-          View roast
+          {isRunningStatus(roast.status)
+            ? "Watch live"
+            : roast.status === "completed"
+              ? "View roast"
+              : "View status"}
           <ArrowRight className="size-4" />
         </Link>
       </Button>
@@ -92,7 +96,7 @@ export default function DashboardPage() {
 
   if (roasts.isPending || resumes.isPending) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4">
+      <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -148,7 +152,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="space-y-4">
       <PageHeader
         title="Overview"
         description="Your resumes and the roasts they have endured."

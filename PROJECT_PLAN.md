@@ -83,7 +83,7 @@
 
 ### M1.6 — Middleware
 
-- [~] `app/common/middleware.py` — Rate limiting — **updated 2026-10-29**: per-tier daily cap (free 3 / pro 50 from settings, by `users.tier`) enforced in the analysis service + login brute-force throttle via `LoginThrottle`; slowapi burst limiting itself stays deferred (meaningful per-IP limits need Redis for multi-worker)
+- [~] `app/common/middleware.py` — Rate limiting — **updated 2026-10-30**: per-tier daily cap (free 3 / pro 50 from settings, by `users.tier`) enforced in the analysis service — the seeded demo account (`TIER_DEMO`, unlimited) is exempt — + login brute-force throttle via `LoginThrottle`; slowapi burst limiting itself stays deferred (meaningful per-IP limits need Redis for multi-worker)
 - [x] Add `CORSMiddleware` to `app/main.py` — now registered via `common/middleware.py::setup_middleware` together with logging
 - [x] Add request logging middleware — `http_request method/path/status/duration_ms` per request + `X-Process-Time` response header
 - [x] Add global exception handler for `AppException` → structured JSON error response
@@ -337,7 +337,7 @@
 
 - [x] `app/ai/scoring.py` — `calculate_scores(aggregated_results, evaluator_outputs, mode) -> ScoringResult` — **done, adapted signature**: `calculate_scores(resume, raw_text, evaluator_outputs, failed_evaluators, mode)`
 - [x] Deterministic: 50% of total
-- [x] AI-assessed: 50% of total (from evaluator summaries) — from evaluator categorical ratings mapped to fixed bands (excellent 94 / good 78.5 / fair 57 / poor 32 / missing 9.5)
+- [x] AI-assessed: 50% of total (from evaluator summaries) — from evaluator categorical ratings mapped to fixed bands — **recalibrated v2 (2026-10-30)**: excellent 88 / good 72 / fair 50 / poor 26 / missing 5 (was 94/78.5/57/32/9.5), matching the 2026 reference scorecard; `score_verdict()` adds blunt labels (Interview-ready / Needs work / Will get screened out / Instant-reject pile)
 - [x] Mode-specific weights (from architecture: Content Quality, Experience, Skills Alignment, ATS, Role Relevance) — `MODE_WEIGHTS` (general wired; role/JD pending)
 - [x] Partial-failure weight renormalization — failed categories dropped, surviving weights renormalized to 100%; deterministic-only fallback when all AI fails
 - [x] Return: `{ overall_score: 0-100, breakdown: {...}, methodology: {...} }` — `ScoringResult` in `app/schemas/report.py`
@@ -345,7 +345,7 @@
 
 ### M5.3 — Roast Compositor
 
-- [x] `app/ai/composer.py` — `compose_roast(aggregated_results, scores, context) -> str` — **done, adapted**: returns `(roast, fallback_used, usage)`; 200–350 word prose, quotes findings, no invention
+- [x] `app/ai/composer.py` — `compose_roast(aggregated_results, scores, context) -> str` — **done, adapted + upgraded to v2 (2026-10-30)**: returns a structured `RoastReport` (headline_verdict, verdict_summary, five_second_impression, poison_points, exactly 3 market verdicts, prose roast) + `(fallback_used, usage)`; prompt v2 = 2026 Hiring Panel persona; deterministic fallback fills every field
 - [x] Load composer prompt from `app/ai/prompts/composer.py` — VERSION + SYSTEM_PROMPT (persona + rules)
 - [x] Feed aggregated results + scores — compact JSON within token budget (8 items/list, 160 chars/item)
 - [x] Handle failure: return raw aggregated results as fallback — deterministic template; pipeline marks the analysis `partial`

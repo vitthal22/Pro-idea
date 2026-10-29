@@ -19,7 +19,7 @@ export default function ProfilePage() {
 
   if (userPending) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="space-y-4">
         <Skeleton className="h-32 w-full rounded-2xl" />
         <Skeleton className="h-24 w-full rounded-2xl" />
       </div>
@@ -57,7 +57,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       <PageHeader title="Profile" description="Your account at a glance." />
 
       <div className="rounded-2xl border border-border bg-card p-8 text-center">

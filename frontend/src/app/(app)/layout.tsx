@@ -52,7 +52,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <span className="size-8" aria-hidden />
         </header>
 
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        {/* One constant container for every page — content edges never
+            jump between routes. Pages add vertical rhythm only. */}
+        <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">{children}</main>
       </div>
     </div>
   );

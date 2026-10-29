@@ -18,6 +18,10 @@ if TYPE_CHECKING:
     from app.models.analysis import AnalysisModel
     from app.models.resume import ResumeModel
 
+# The startup-seeded walkthrough account (DEMO_USER_*). Unlimited daily
+# analyses — see _enforce_daily_cap in services/analysis.py.
+TIER_DEMO = "demo"
+
 
 class UserModel(Base):
     """Persisted user account."""

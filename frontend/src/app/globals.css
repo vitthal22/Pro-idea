@@ -54,6 +54,8 @@
  * one ember accent for everything primary. Light theme = warm paper.
  */
 :root {
+  /* Native controls (select popups, scrollbars, autofill) follow the theme */
+  color-scheme: light;
   --radius: 0.75rem;
   --background: oklch(0.985 0.005 85);
   --foreground: oklch(0.21 0.01 60);
@@ -89,6 +91,8 @@
 }
 
 .dark {
+  /* Dark native select popups / scrollbars instead of the OS light theme */
+  color-scheme: dark;
   --background: oklch(0.14 0.008 60);
   --foreground: oklch(0.96 0.006 85);
   --card: oklch(0.18 0.01 60);

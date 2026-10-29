@@ -19,7 +19,7 @@ export default function HistoryPage() {
   const error = roasts.isError ? roasts.error : resumes.isError ? resumes.error : null;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader
         title="History"
         description="Every roast you have run, and every resume you have uploaded."
