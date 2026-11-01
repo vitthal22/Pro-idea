@@ -36,6 +36,9 @@ def _provider_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "ai_provider", "gemini")
     monkeypatch.setattr(settings, "ai_model", "gemini/gemini-test-model")
     monkeypatch.setattr(settings, "ai_fast_model", "gemini/gemini-test-fast")
+    monkeypatch.setattr(settings, "ai_model_chain", None)
+    monkeypatch.setattr(settings, "ai_model_chain_free", None)
+    monkeypatch.setattr(settings, "ai_model_chain_pro", None)
     monkeypatch.setattr(settings, "ai_timeout", 5.0)
     monkeypatch.setattr(settings, "ai_max_tokens", 256)
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
@@ -204,3 +207,136 @@ async def test_missing_usage_defaults_to_zero(
 
     assert result.prompt_tokens == 0
     assert result.completion_tokens == 0
+
+
+async def test_model_chain_from_settings_is_walked_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models_tried: list[str] = []
+
+    async def fake_acompletion(**kwargs: Any):
+        models_tried.append(kwargs["model"])
+        if kwargs["model"] == "gemini/gemini-test-model":
+            raise RuntimeError("primary down")
+        return _fake_response("from the second model")
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+    monkeypatch.setattr(
+        settings,
+        "ai_model_chain",
+        "gemini/gemini-test-model, gemini/gemini-test-fast, gemini/gemini-test-third",
+    )
+
+    result = await call_ai(system_prompt="s", user_prompt="u")
+
+    assert result.model == "gemini/gemini-test-fast"
+    assert models_tried == ["gemini/gemini-test-model", "gemini/gemini-test-fast"]
+
+
+async def test_rate_limit_drops_model_without_retrying_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 429/quota error must advance the cascade immediately, not retry."""
+    models_tried: list[str] = []
+
+    async def fake_acompletion(**kwargs: Any):
+        models_tried.append(kwargs["model"])
+        if kwargs["model"] == "gemini/gemini-test-model":
+            raise litellm.RateLimitError(
+                "quota gone for today", llm_provider="gemini", model="gemini-test-model"
+            )
+        return _fake_response("from the fallback")
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+
+    result = await call_ai(system_prompt="s", user_prompt="u", max_retries=3)
+
+    assert result.model == "gemini/gemini-test-fast"
+    assert result.fallback_used is True
+    # exactly one attempt on the rate-limited model despite max_retries=3
+    assert models_tried == ["gemini/gemini-test-model", "gemini/gemini-test-fast"]
+
+
+async def test_rate_limit_on_every_model_raises_without_retry_spam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models_tried: list[str] = []
+
+    async def fake_acompletion(**kwargs: Any):
+        models_tried.append(kwargs["model"])
+        raise litellm.RateLimitError(
+            "quota gone", llm_provider="gemini", model=kwargs["model"]
+        )
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+
+    with pytest.raises(AIEvaluationError):
+        await call_ai(system_prompt="s", user_prompt="u", max_retries=3)
+
+    # each configured model tried exactly once — no backoff spam on 429s
+    assert models_tried == ["gemini/gemini-test-model", "gemini/gemini-test-fast"]
+
+
+async def test_explicit_chain_overrides_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models_tried: list[str] = []
+
+    async def fake_acompletion(**kwargs: Any):
+        models_tried.append(kwargs["model"])
+        if kwargs["model"] == "x/first":
+            raise RuntimeError("down")
+        return _fake_response("ok")
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+
+    result = await call_ai(
+        system_prompt="s", user_prompt="u", chain=["x/first", "x/second"]
+    )
+
+    assert result.model == "x/second"
+    assert models_tried == ["x/first", "x/second"]
+
+
+def test_resolve_model_chain_defaults_to_legacy_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ai_model_chain", None)
+
+    assert provider_module.resolve_model_chain("free") == [
+        "gemini/gemini-test-model",
+        "gemini/gemini-test-fast",
+    ]
+
+
+def test_resolve_model_chain_uses_configured_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        settings,
+        "ai_model_chain",
+        "x/a,x/b,x/a,x/c",  # duplicates dropped
+    )
+
+    assert provider_module.resolve_model_chain("pro") == ["x/a", "x/b", "x/c"]
+
+
+def test_resolve_model_chain_tier_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ai_model_chain", "x/default")
+    monkeypatch.setattr(settings, "ai_model_chain_free", "x/lite")
+    monkeypatch.setattr(settings, "ai_model_chain_pro", "x/best,x/default")
+
+    assert provider_module.resolve_model_chain("free") == ["x/lite"]
+    assert provider_module.resolve_model_chain("pro") == ["x/best", "x/default"]
+    assert provider_module.resolve_model_chain("demo") == ["x/best", "x/default"]
+    assert provider_module.resolve_model_chain(None) == ["x/default"]
+
+
+def test_resolve_model_chain_fallback_disabled_pins_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ai_fallback_enabled", False)
+
+    assert provider_module.resolve_model_chain("free") == ["gemini/gemini-test-model"]

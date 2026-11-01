@@ -9,7 +9,8 @@ Behaviour:
 
 - Async end to end (``litellm.acompletion``) — never blocks the event loop.
 - Every call has a hard timeout and a ``max_tokens`` cap.
-- Fallback chain: primary model → fast model (enabled via config).
+- Model cascade: the configured chain is walked in order; a 429/quota
+  error drops that model immediately and the next one takes over.
 - Retries with exponential backoff; an invalid structured output counts as
   a failed attempt.
 - Structured outputs: pass ``response_model`` to get a validated Pydantic
@@ -150,25 +151,81 @@ async def _complete(
     )
 
 
+def _parse_chain(raw: str | None) -> list[str]:
+    """Parse a comma-separated model list from settings (no hardcoded names)."""
+    if not raw:
+        return []
+    return [name.strip() for name in raw.split(",") if name.strip()]
+
+
+def _dedupe(models: list[str]) -> list[str]:
+    """Drop duplicates, preserving priority order."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for model in models:
+        if model not in seen:
+            seen.add(model)
+            ordered.append(model)
+    return ordered
+
+
+def resolve_model_chain(tier: str | None = None) -> list[str]:
+    """The ordered model cascade for a user tier.
+
+    Resolution order: the tier's configured chain (``AI_MODEL_CHAIN_FREE``
+    for free users, ``AI_MODEL_CHAIN_PRO`` for pro/demo users) → the default
+    ``AI_MODEL_CHAIN`` → the legacy ``[AI_MODEL, AI_FAST_MODEL]`` pair.
+    Unknown tiers get the default chain. ``ai_fallback_enabled=False`` pins
+    the chain to its head. Model names come from the environment only —
+    this module never hardcodes one.
+    """
+    if tier == "free":
+        tier_raw = settings.ai_model_chain_free
+    elif tier in ("pro", "demo"):
+        tier_raw = settings.ai_model_chain_pro
+    else:
+        tier_raw = None
+    chain = _parse_chain(tier_raw) or _parse_chain(settings.ai_model_chain)
+    if not chain:
+        chain = [settings.ai_model]
+        if settings.ai_fast_model and settings.ai_fast_model != settings.ai_model:
+            chain.append(settings.ai_fast_model)
+    if not settings.ai_fallback_enabled:
+        return chain[:1]
+    return _dedupe(chain)
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """True for 429/quota errors — retrying within this call cannot help."""
+    try:
+        import litellm
+
+        return isinstance(exc, litellm.RateLimitError)
+    except Exception:  # noqa: BLE001 — classification must never raise
+        return False
+
+
 async def call_ai(
     *,
     system_prompt: str,
     user_prompt: str,
     response_model: type[T] | None = None,
     model: str | None = None,
+    chain: list[str] | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
 ) -> AIResult:
-    """Call the AI model with timeout, retries, and a fallback chain.
+    """Call the AI model with timeout, retries, and a model cascade.
 
     Args:
         system_prompt: Instructions for the model.
         user_prompt: The input (e.g. resume data) to evaluate.
         response_model: When given, the output is parsed as JSON and
             validated against this Pydantic model (``AIResult.data``).
-        model: Override model name (defaults to ``settings.ai_model``).
+        model: Head the cascade with this model (defaults to config).
+        chain: Explicit model cascade, overriding the configured one.
         timeout: Override per-call timeout in seconds.
-        max_retries: Override retry count for the primary model.
+        max_retries: Override retry count per model.
 
     Returns:
         ``AIResult`` with the raw text, token usage, and parsed data.
@@ -177,14 +234,13 @@ async def call_ai(
         AIEvaluationError: If every attempt on every model in the chain
             fails (network, timeout, or invalid structured output).
     """
-    primary_model = model or settings.ai_model
-    chain = [primary_model]
-    if (
-        settings.ai_fallback_enabled
-        and settings.ai_fast_model
-        and settings.ai_fast_model != primary_model
-    ):
-        chain.append(settings.ai_fast_model)
+    model_chain = _dedupe([*(chain or []), *resolve_model_chain()])
+    if model is not None:
+        model_chain = _dedupe([model, *model_chain])
+    if not model_chain:
+        raise AIEvaluationError(
+            evaluator="AI provider", reason="No AI model is configured"
+        )
 
     effective_timeout = timeout if timeout is not None else settings.ai_timeout
     retries = max_retries if max_retries is not None else settings.ai_max_retries
@@ -197,10 +253,13 @@ async def call_ai(
         )
 
     last_error: Exception | None = None
+    remaining = list(model_chain)
     for attempt in range(retries + 1):
         if attempt > 0:
             await asyncio.sleep(RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1)))
-        for chain_model in chain:
+        index = 0
+        while index < len(remaining):
+            chain_model = remaining[index]
             started = time.monotonic()
             try:
                 response = await _complete(
@@ -225,6 +284,16 @@ async def call_ai(
                     retries + 1,
                     exc,
                 )
+                if _is_rate_limit_error(exc):
+                    # A 429/quota error will not heal inside this call —
+                    # drop the model and advance to the next one now.
+                    logger.warning(
+                        "Rate limit on %s — dropping it, advancing the cascade",
+                        chain_model,
+                    )
+                    remaining.pop(index)
+                    continue
+                index += 1
                 continue
             logger.info(
                 "AI call ok (model=%s, attempt=%d, elapsed=%.2fs, "
@@ -234,14 +303,14 @@ async def call_ai(
                 time.monotonic() - started,
                 prompt_tokens,
                 completion_tokens,
-                chain_model != primary_model,
+                chain_model != model_chain[0],
             )
             return AIResult(
                 content=content,
                 model=chain_model,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                fallback_used=chain_model != primary_model,
+                fallback_used=chain_model != model_chain[0],
                 data=data,
             )
 

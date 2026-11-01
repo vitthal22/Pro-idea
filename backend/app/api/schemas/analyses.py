@@ -78,6 +78,10 @@ class AnalysisResultPayload(BaseModel):
         description="Structured 2026 Hiring Panel verdict (v2 composer) — "
         "headline, five-second impression, poison points, market analysis"
     )
+    fix_plan: dict[str, Any] | None = Field(
+        description="AI before → after rewrites of the top issues (fix "
+        "planner) — None when the fix-planner pass failed"
+    )
     evaluator_summaries: dict[str, str]
     failed_evaluators: list[str]
     roast_fallback_used: bool = Field(

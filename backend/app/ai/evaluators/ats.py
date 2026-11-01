@@ -13,6 +13,7 @@ from app.schemas.evaluators import ATSEvaluatorOutput
 async def run_ats_evaluator(
     resume_data: dict[str, Any],
     context: dict[str, Any] | None = None,
+    chain: list[str] | None = None,
 ) -> tuple[ATSEvaluatorOutput, AIResult]:
     """Judge how the resume fares in automated parsing and ranking."""
     return await run_evaluator(
@@ -21,4 +22,5 @@ async def run_ats_evaluator(
         response_model=ATSEvaluatorOutput,
         resume_data=resume_data,
         context=context,
+        chain=chain,
     )

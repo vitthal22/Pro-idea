@@ -29,6 +29,7 @@ from sqlalchemy.orm import selectinload
 
 from app.ai.aggregator import aggregate_results
 from app.ai.composer import compose_roast
+from app.ai.fix_planner import plan_fixes
 from app.ai.orchestrator import get_evaluators_for_mode, run_evaluations
 from app.ai.parser import parse_resume
 from app.ai.prompts.composer import VERSION as COMPOSER_VERSION
@@ -37,8 +38,10 @@ from app.ai.prompts.evaluators.content_quality import VERSION as CONTENT_VERSION
 from app.ai.prompts.evaluators.job_matcher import VERSION as JOB_MATCHER_VERSION
 from app.ai.prompts.evaluators.recruiter import VERSION as RECRUITER_VERSION
 from app.ai.prompts.evaluators.technical import VERSION as TECHNICAL_VERSION
+from app.ai.prompts.fix_planner import VERSION as FIX_PLANNER_VERSION
 from app.ai.prompts.parser import VERSION as PARSER_VERSION
 from app.ai.prompts.roles import get_role_context
+from app.ai.provider import resolve_model_chain
 from app.ai.scoring import calculate_scores
 from app.common.exceptions import (
     AnalysisFailedError,
@@ -52,6 +55,8 @@ from app.models.analysis import AnalysisModel, AnalysisResultModel
 from app.models.analysis_usage import AnalysisUsageModel
 from app.models.resume import ResumeModel
 from app.models.user import TIER_DEMO
+from app.schemas.evaluators import JobMatchEvaluatorOutput
+from app.services.user_repository import get_user_repository
 
 logger = logging.getLogger("app.services.analysis")
 
@@ -65,6 +70,7 @@ PROMPT_VERSIONS: dict[str, str] = {
     "content_quality": CONTENT_VERSION,
     "job_matcher": JOB_MATCHER_VERSION,
     "composer": COMPOSER_VERSION,
+    "fix_planner": FIX_PLANNER_VERSION,
 }
 
 
@@ -248,13 +254,17 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
         return
     try:
         await _set_stage(session, analysis, "extracting")
+        # The model cascade follows the owner's tier (paid-tier seam) —
+        # resolved once and threaded through every AI step below.
+        owner = await get_user_repository(session).get_by_id(analysis.user_id)
+        chain = resolve_model_chain(owner.tier if owner else None)
         resume = await session.get(ResumeModel, analysis.resume_id)
         raw_text = resume.raw_text if resume is not None else None
         if not raw_text:
             raise AnalysisFailedError("extracting", "resume has no extracted text")
 
         await _set_stage(session, analysis, "parsing")
-        structured = await parse_resume(raw_text)
+        structured = await parse_resume(raw_text, chain=chain)
         if resume is not None:
             resume.structured_data = {
                 **(resume.structured_data or {}),
@@ -266,6 +276,7 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
             structured.model_dump(),
             analysis.analysis_type,
             context=_analysis_context(analysis),
+            chain=chain,
         )
 
         await _set_stage(session, analysis, "scoring")
@@ -279,16 +290,44 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
         )
 
         await _set_stage(session, analysis, "composing")
-        report, roast_fallback, composer_usage = await compose_roast(
-            aggregated, scoring, custom_instructions=analysis.custom_instructions
+        # Composer and fix planner both consume the aggregated findings and
+        # are independent of each other — run them concurrently.
+        job_match_output = evaluations.outputs.get("job_matcher")
+        (
+            (report, roast_fallback, composer_usage),
+            (fix_plan, fix_usage),
+        ) = await asyncio.gather(
+            compose_roast(
+                aggregated,
+                scoring,
+                custom_instructions=analysis.custom_instructions,
+                chain=chain,
+            ),
+            plan_fixes(
+                aggregated,
+                structured.model_dump(),
+                job_match=(
+                    job_match_output
+                    if isinstance(job_match_output, JobMatchEvaluatorOutput)
+                    else None
+                ),
+                context=_analysis_context(analysis),
+                chain=chain,
+            ),
         )
 
         session.add(
             _result_row(
-                analysis.id, evaluations, aggregated, scoring, report, roast_fallback
+                analysis.id,
+                evaluations,
+                aggregated,
+                scoring,
+                report,
+                roast_fallback,
+                fix_plan,
             )
         )
-        for usage in [*evaluations.usage, composer_usage]:
+        for usage in [*evaluations.usage, composer_usage, fix_usage]:
             if usage is None:
                 continue
             session.add(
@@ -303,8 +342,9 @@ async def _execute_pipeline(session: AsyncSession, analysis_id: UUID) -> None:
             )
 
         usage_models = [u.model for u in evaluations.usage if u.model]
-        if composer_usage is not None and composer_usage.model:
-            usage_models.append(composer_usage.model)
+        for step_usage in (composer_usage, fix_usage):
+            if step_usage is not None and step_usage.model:
+                usage_models.append(step_usage.model)
         analysis.status = (
             "partial" if (evaluations.failed or roast_fallback) else "completed"
         )
@@ -352,6 +392,7 @@ def _result_row(
     scoring: Any,
     report: Any,
     roast_fallback: bool,
+    fix_plan: Any,
 ) -> AnalysisResultModel:
     """Map pipeline outputs onto the denormalized ``analysis_results`` row."""
     return AnalysisResultModel(
@@ -381,5 +422,6 @@ def _result_row(
             "failed_evaluators": aggregated.failed_evaluators,
             "roast_fallback_used": roast_fallback,
             "reality_check": report.model_dump(),
+            "fix_plan": fix_plan.model_dump() if fix_plan is not None else None,
         },
     )

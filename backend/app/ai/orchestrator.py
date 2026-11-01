@@ -36,7 +36,7 @@ from app.ai.provider import AIResult
 logger = logging.getLogger("app.ai.orchestrator")
 
 EvaluatorFn = Callable[
-    [dict[str, Any], dict[str, Any] | None],
+    [dict[str, Any], dict[str, Any] | None, list[str] | None],
     Awaitable[tuple[BaseModel, AIResult]],
 ]
 
@@ -92,6 +92,7 @@ async def run_evaluations(
     resume_data: dict[str, Any],
     mode: str,
     context: dict[str, Any] | None = None,
+    chain: list[str] | None = None,
 ) -> EvaluatorResults:
     """Run all evaluators for ``mode`` in parallel; failures never abort.
 
@@ -100,6 +101,7 @@ async def run_evaluations(
         mode: Analysis mode — must be a wired one.
         context: Analysis context (``target_role`` / ``job_description`` /
             ``custom_instructions``) forwarded to every evaluator.
+        chain: Model cascade override (tier-derived); None uses config.
 
     Returns:
         Surviving outputs, failed evaluators with reasons, and per-call
@@ -111,7 +113,7 @@ async def run_evaluations(
         return results
 
     outcomes = await asyncio.gather(
-        *(fn(resume_data, context) for fn in evaluators.values()),
+        *(fn(resume_data, context, chain) for fn in evaluators.values()),
         return_exceptions=True,
     )
     for name, outcome in zip(evaluators, outcomes, strict=True):

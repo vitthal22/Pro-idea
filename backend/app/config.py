@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     ai_model: str = "gpt-4o"
     ai_fast_model: str = "gpt-4o-mini"
+    # Ordered model cascade (litellm names, comma-separated) — tried left to
+    # right; on a 429/quota error the next model is used immediately. When
+    # unset, the legacy [ai_model, ai_fast_model] pair is used.
+    ai_model_chain: str | None = None
+    # Per-tier chain overrides (paid-tier seam: when payments ship, point
+    # PRO at the best models and FREE at the cheap ones — env-only change).
+    ai_model_chain_free: str | None = None
+    ai_model_chain_pro: str | None = None
     ai_timeout: float = 60.0  # seconds per AI call
     ai_max_retries: int = 2  # attempts per call before giving up
     ai_fallback_enabled: bool = True  # try AI_FAST_MODEL when the primary fails

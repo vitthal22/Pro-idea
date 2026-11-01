@@ -24,11 +24,14 @@ MAX_RESUME_CHARS = 15_000
 _USER_PROMPT_PREFIX = "Extract the structured data from this resume:\n\n"
 
 
-async def parse_resume(raw_text: str) -> StructuredResume:
+async def parse_resume(
+    raw_text: str, chain: list[str] | None = None
+) -> StructuredResume:
     """Parse raw resume text into a ``StructuredResume``.
 
     Args:
         raw_text: The extracted resume text (from ``document_processing``).
+        chain: Model cascade override (tier-derived); None uses config.
 
     Returns:
         The structured resume. Fields the resume does not mention stay
@@ -51,6 +54,7 @@ async def parse_resume(raw_text: str) -> StructuredResume:
         user_prompt=f"{_USER_PROMPT_PREFIX}{truncated}",
         response_model=PARSER_RESPONSE_MODEL,
         model=settings.ai_fast_model,
+        chain=chain,
     )
 
     if not isinstance(result.data, StructuredResume):

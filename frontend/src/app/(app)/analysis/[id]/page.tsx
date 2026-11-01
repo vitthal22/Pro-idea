@@ -137,7 +137,11 @@ export default function AnalysisPage({
               </Button>
             }
           />
-          <RoastResult result={data.result} verdict={data.score_verdict} />
+          <RoastResult
+            result={data.result}
+            verdict={data.score_verdict}
+            analysisType={data.analysis_type}
+          />
         </>
       )}
     </div>

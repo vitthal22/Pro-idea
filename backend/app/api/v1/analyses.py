@@ -58,6 +58,7 @@ def _result_payload(result: AnalysisResultModel | None) -> AnalysisResultPayload
         methodology=result.scoring_methodology,
         job_match_feedback=result.job_match_feedback,
         reality_check=report.get("reality_check"),
+        fix_plan=report.get("fix_plan"),
         evaluator_summaries=report.get("evaluator_summaries", {}),
         failed_evaluators=report.get("failed_evaluators", []),
         roast_fallback_used=bool(report.get("roast_fallback_used", False)),

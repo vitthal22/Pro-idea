@@ -20,6 +20,7 @@ from app.schemas.evaluators import JobMatchEvaluatorOutput
 async def run_job_matcher_evaluator(
     resume_data: dict[str, Any],
     context: dict[str, Any] | None = None,
+    chain: list[str] | None = None,
 ) -> tuple[JobMatchEvaluatorOutput, AIResult]:
     """Judge the resume's fit against the provided role or job description."""
     if not context or not (
@@ -43,4 +44,5 @@ async def run_job_matcher_evaluator(
         response_model=JobMatchEvaluatorOutput,
         resume_data=resume_data,
         context=context,
+        chain=chain,
     )

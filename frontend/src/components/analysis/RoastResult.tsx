@@ -6,6 +6,7 @@ import {
   Check,
   Eye,
   Flame,
+  Lightbulb,
   X,
 } from "lucide-react";
 
@@ -13,7 +14,10 @@ import { ScoreRing } from "@/components/analysis/score-ring";
 import { Badge } from "@/components/ui/badge";
 import type {
   AnalysisResultPayload,
+  AnalysisType,
   CategoryScore,
+  FixPlan,
+  FixPlanItem,
   MarketVerdict,
   ReportItem,
   ScoreVerdict,
@@ -435,13 +439,94 @@ function Breakdown({ result }: { result: AnalysisResultPayload }) {
   );
 }
 
+const SEVERITY_CHIP: Record<FixPlanItem["severity"], string> = {
+  critical: "border-destructive/40 bg-destructive/10 text-destructive",
+  warning:
+    "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-500",
+  enhancement: "border-primary/40 bg-primary/10 text-primary",
+};
+
+const FIX_PLAN_SUBTITLE: Record<AnalysisType, string> = {
+  jd_based: "Tailored to the job posting you pasted",
+  role_based: "Tuned to the target role",
+  general: "Market-optimized rewrites",
+  custom: "Focused on what you asked for",
+};
+
+/** The AI fix plan: each top issue with the original line and its rewrite. */
+function FixPlanSection({ plan, mode }: { plan: FixPlan; mode: AnalysisType }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      className="overflow-hidden rounded-2xl border border-primary/25 bg-card"
+    >
+      <div className="p-6 sm:p-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant="outline"
+            className="border-primary/40 bg-primary/10 text-primary"
+          >
+            Fix plan
+          </Badge>
+          <Badge variant="outline" className="text-muted-foreground">
+            AI-rewritten
+          </Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-bold tracking-tight">Optimize it</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {FIX_PLAN_SUBTITLE[mode]}
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">{plan.intro}</p>
+
+        <div className="mt-6 space-y-4">
+          {plan.fixes.map((fix) => (
+            <div key={fix.issue} className="rounded-xl border border-border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold">{fix.issue}</span>
+                <Badge
+                  variant="outline"
+                  className={`capitalize ${SEVERITY_CHIP[fix.severity]}`}
+                >
+                  {fix.severity}
+                </Badge>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-destructive">
+                    <X className="size-3" aria-hidden />
+                    Before
+                  </p>
+                  <p className="mt-1.5 text-sm">{fix.before}</p>
+                </div>
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    <Check className="size-3" aria-hidden />
+                    After
+                  </p>
+                  <p className="mt-1.5 text-sm">{fix.after}</p>
+                </div>
+              </div>
+              <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+                <Lightbulb className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {fix.why}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 /** The full roast view — only rendered for fully completed analyses. */
 export function RoastResult({
   result,
   verdict,
+  analysisType,
 }: {
   result: AnalysisResultPayload;
   verdict: ScoreVerdict | null;
+  analysisType: AnalysisType;
 }) {
   return (
     <motion.div
@@ -456,6 +541,10 @@ export function RoastResult({
 
       {result.reality_check && (
         <RealityCheck result={result} />
+      )}
+
+      {result.fix_plan && (
+        <FixPlanSection plan={result.fix_plan} mode={analysisType} />
       )}
 
       {result.final_roast && !result.reality_check && (

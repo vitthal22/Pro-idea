@@ -65,6 +65,7 @@ async def run_evaluator(
     response_model: type[T],
     resume_data: dict[str, Any],
     context: dict[str, Any] | None = None,
+    chain: list[str] | None = None,
 ) -> tuple[T, AIResult]:
     """Run one evaluator: prompt → AI call → validated output + usage.
 
@@ -76,6 +77,7 @@ async def run_evaluator(
         context: Optional analysis context (``target_role``,
             ``job_description``, ``custom_instructions``) appended to the
             user prompt for role/JD/custom modes.
+        chain: Model cascade override (tier-derived); None uses config.
 
     Returns:
         The validated evaluator output and the underlying ``AIResult``
@@ -89,6 +91,7 @@ async def run_evaluator(
         system_prompt=system_prompt,
         user_prompt=compose_user_prompt(resume_data, context),
         response_model=response_model,
+        chain=chain,
     )
     if not isinstance(result.data, response_model):
         raise AIEvaluationError(

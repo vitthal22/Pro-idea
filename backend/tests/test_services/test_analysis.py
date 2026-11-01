@@ -21,7 +21,7 @@ from app.schemas.evaluators import (
     RecruiterEvaluatorOutput,
     TechnicalEvaluatorOutput,
 )
-from app.schemas.report import RoastReport
+from app.schemas.report import FixPlanItem, FixPlanReport, RoastReport
 from app.schemas.resume import StructuredResume
 from app.services import analysis as analysis_module
 from app.services.analysis import AnalysisService, _execute_pipeline
@@ -82,25 +82,29 @@ def _patch_ai(
     failed_evaluators: dict[str, str] | None = None,
     roast: str = "Your resume needs work, and here is why.",
     roast_fallback: bool = False,
+    plan_fixes_fails: bool = False,
     captured: dict[str, Any] | None = None,
 ) -> None:
-    """Stub parse_resume / run_evaluations / compose_roast at the seams.
+    """Stub parse_resume / run_evaluations / compose_roast / plan_fixes.
 
     ``captured`` (when given) receives the context and custom_instructions
     the pipeline handed to the seams — used to assert mode wiring.
     """
 
-    async def fake_parse_resume(raw_text: str) -> StructuredResume:
+    async def fake_parse_resume(raw_text: str, chain=None) -> StructuredResume:
+        if captured is not None:
+            captured["parse_chain"] = chain
         if fail_parsing is not None:
             raise RuntimeError(fail_parsing)
         return STRUCTURED
 
     async def fake_run_evaluations(
-        resume_data: dict, mode: str, context: dict | None = None
+        resume_data: dict, mode: str, context: dict | None = None, chain=None
     ) -> EvaluatorResults:
         if captured is not None:
             captured["mode"] = mode
             captured["context"] = context
+            captured["chain"] = chain
         outputs = {
             name: payload
             for name, payload in _EVALUATOR_PAYLOADS.items()
@@ -143,14 +147,48 @@ def _patch_ai(
             roast=roast_text,
         )
 
-    async def fake_compose_roast(aggregated, scoring, custom_instructions=None):
+    async def fake_compose_roast(
+        aggregated, scoring, custom_instructions=None, chain=None
+    ):
         if captured is not None:
             captured["custom_instructions"] = custom_instructions
         return _mock_report(roast), roast_fallback, _usage()
 
+    def _mock_fix_plan() -> FixPlanReport:
+        return FixPlanReport(
+            intro="Fix the metrics first, then the opener.",
+            fixes=[
+                FixPlanItem(
+                    issue="Unverified metrics",
+                    severity="critical",
+                    before="Improved API performance by 20%",
+                    after="Cut p99 latency 200ms to 140ms at 40k req/day",
+                    why="Real measurement pairs are verifiable.",
+                ),
+                FixPlanItem(
+                    issue="Generic opener",
+                    severity="enhancement",
+                    before="Hardworking developer",
+                    after="Backend developer: FastAPI + Postgres",
+                    why="Leads with the stack, not adjectives.",
+                ),
+            ],
+        )
+
+    async def fake_plan_fixes(
+        aggregated, resume_data, job_match=None, context=None, chain=None
+    ):
+        if captured is not None:
+            captured["job_match"] = job_match
+            captured["fix_context"] = context
+        if plan_fixes_fails:
+            return None, None
+        return _mock_fix_plan(), _usage()
+
     monkeypatch.setattr(analysis_module, "parse_resume", fake_parse_resume)
     monkeypatch.setattr(analysis_module, "run_evaluations", fake_run_evaluations)
     monkeypatch.setattr(analysis_module, "compose_roast", fake_compose_roast)
+    monkeypatch.setattr(analysis_module, "plan_fixes", fake_plan_fixes)
 
 
 async def _make_queued_analysis(
@@ -215,6 +253,7 @@ async def test_pipeline_success_persists_result_and_usage(
         "content_quality",
         "job_matcher",
         "composer",
+        "fix_planner",
     }
 
     result = await db_session.scalar(
@@ -239,7 +278,7 @@ async def test_pipeline_success_persists_result_and_usage(
         .select_from(AnalysisUsageModel)
         .where(AnalysisUsageModel.analysis_id == analysis.id)
     )
-    assert usage_count == 6  # 5 evaluator outputs (incl. job_matcher mock) + 1 composer
+    assert usage_count == 7  # 5 evaluators + composer + fix planner
 
     # Parsed data is stored back on the resume for reuse.
     stored_resume = await db_session.get(ResumeModel, analysis.resume_id)
@@ -268,6 +307,108 @@ async def test_pipeline_partial_when_an_evaluator_fails(
     assert result.scoring_methodology["failed_evaluators"] == ["technical"]
     assert result.final_report is not None
     assert result.final_report["failed_evaluators"] == ["technical"]
+
+
+async def test_pipeline_persists_fix_plan(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    _patch_ai(monkeypatch)
+    analysis = await _make_queued_analysis(db_session, email_factory)
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    result = await db_session.scalar(
+        select(AnalysisResultModel).where(
+            AnalysisResultModel.analysis_id == analysis.id
+        )
+    )
+    assert result is not None
+    fix_plan = (result.final_report or {}).get("fix_plan")
+    assert fix_plan is not None
+    assert fix_plan["fixes"][0]["severity"] == "critical"
+    assert fix_plan["fixes"][0]["after"].startswith("Cut p99 latency")
+
+    usage_count = await db_session.scalar(
+        select(func.count())
+        .select_from(AnalysisUsageModel)
+        .where(AnalysisUsageModel.analysis_id == analysis.id)
+    )
+    # 5 evaluator outputs + composer + fix planner
+    assert usage_count == 7
+
+
+async def test_pipeline_survives_fix_planner_failure(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    """A failed fix planner is supplementary — the status stays completed."""
+    _patch_ai(monkeypatch, plan_fixes_fails=True)
+    analysis = await _make_queued_analysis(db_session, email_factory)
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    result = await db_session.scalar(
+        select(AnalysisResultModel).where(
+            AnalysisResultModel.analysis_id == analysis.id
+        )
+    )
+    assert result is not None
+    assert result.final_roast == "Your resume needs work, and here is why."
+    assert (result.final_report or {}).get("fix_plan") is None
+
+    usage_count = await db_session.scalar(
+        select(func.count())
+        .select_from(AnalysisUsageModel)
+        .where(AnalysisUsageModel.analysis_id == analysis.id)
+    )
+    assert usage_count == 6  # fix planner produced no usage on failure
+
+
+async def test_jd_based_pipeline_feeds_job_match_to_fix_planner(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    captured: dict[str, Any] = {}
+    _patch_ai(monkeypatch, captured=captured)
+    analysis = await _make_queued_analysis(
+        db_session,
+        email_factory,
+        analysis_type="jd_based",
+        job_description="Build data pipelines with Kafka and Postgres.",
+    )
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    # The Job Matcher output and the exact JD reached the fix planner.
+    assert captured["job_match"] is not None
+    assert captured["job_match"].missing_skills == ["Kubernetes operations"]
+    assert captured["fix_context"]["job_description"] == (
+        "Build data pipelines with Kafka and Postgres."
+    )
+
+
+async def test_pipeline_passes_owner_tier_chain_to_ai_steps(
+    db_session: AsyncSession, email_factory, monkeypatch
+) -> None:
+    from app.ai.provider import resolve_model_chain
+
+    captured: dict[str, Any] = {}
+    _patch_ai(monkeypatch, captured=captured)
+    analysis = await _make_queued_analysis(db_session, email_factory)
+
+    await _execute_pipeline(db_session, analysis.id)
+
+    await db_session.refresh(analysis)
+    assert analysis.status == "completed", analysis.error_message
+    # Repository-created users default to the free tier — the chain handed
+    # to every AI step is that tier's cascade.
+    expected = resolve_model_chain("free")
+    assert captured["parse_chain"] == expected
+    assert captured["chain"] == expected
 
 
 async def test_pipeline_failed_when_parsing_fails(

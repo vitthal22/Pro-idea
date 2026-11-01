@@ -93,6 +93,21 @@ export interface ScoreVerdict {
   line: string;
 }
 
+/** One before → after rewrite from the fix planner. */
+export interface FixPlanItem {
+  issue: string;
+  severity: "critical" | "warning" | "enhancement";
+  before: string;
+  after: string;
+  why: string;
+}
+
+/** The AI fix plan (mirrors backend FixPlanReport). */
+export interface FixPlan {
+  intro: string;
+  fixes: FixPlanItem[];
+}
+
 /** The roast itself — mirrors backend AnalysisResultPayload. */
 export interface AnalysisResultPayload {
   overall_score: number | null;
@@ -105,6 +120,7 @@ export interface AnalysisResultPayload {
   methodology: Record<string, unknown> | null;
   job_match_feedback: JobMatchFeedback | null;
   reality_check: RealityCheck | null;
+  fix_plan: FixPlan | null;
   evaluator_summaries: Record<string, string>;
   failed_evaluators: string[];
   roast_fallback_used: boolean;

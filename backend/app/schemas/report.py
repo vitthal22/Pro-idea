@@ -157,3 +157,52 @@ class RoastReport(BaseModel):
     roast: str = Field(
         description="The narrative roast, 200-350 words of flowing prose"
     )
+
+
+class FixPlanItem(BaseModel):
+    """One optimized rewrite: the issue, the original text, the fixed text.
+
+    Produced by the fix planner (``app.ai.fix_planner``). ``before`` must
+    quote the resume verbatim; ``after`` may only use the candidate's real
+    numbers.
+    """
+
+    issue: str = Field(
+        max_length=200,
+        description="The problem being fixed, in one line",
+    )
+    severity: Literal["critical", "warning", "enhancement"] = Field(
+        description="Which finding bucket this fix addresses"
+    )
+    before: str = Field(
+        max_length=300,
+        description="The original resume text, quoted verbatim from RESUME DATA",
+    )
+    after: str = Field(
+        max_length=300,
+        description="The optimized rewrite of that same line",
+    )
+    why: str = Field(
+        max_length=300,
+        description="Why the rewrite beats the original (one or two sentences)",
+    )
+
+
+class FixPlanReport(BaseModel):
+    """Structured fix plan produced by the fix planner.
+
+    Stored under ``analysis_results.final_report["fix_plan"]`` and rendered
+    by the result page's "Optimize it" section. Absent (None) when the fix
+    planner fails — the rest of the report is unaffected.
+    """
+
+    intro: str = Field(
+        max_length=300,
+        description="Two-sentence strategy summary of what the rewrites fix "
+        "and why that order",
+    )
+    fixes: list[FixPlanItem] = Field(
+        min_length=2,
+        max_length=6,
+        description="The 2-6 highest-impact rewrites, highest priority first",
+    )

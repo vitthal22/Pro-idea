@@ -165,6 +165,7 @@ async def compose_roast(
     aggregated: AggregatedResults,
     scoring: ScoringResult,
     custom_instructions: str | None = None,
+    chain: list[str] | None = None,
 ) -> tuple[RoastReport, bool, AIResult | None]:
     """Compose the structured reality check + narrative roast.
 
@@ -173,6 +174,7 @@ async def compose_roast(
         scoring: The hybrid scoring result (score + context for the roast).
         custom_instructions: The user's own focus areas (``custom`` mode) —
             the roast leans into what they asked to be judged on.
+        chain: Model cascade override (tier-derived); None uses config.
 
     Returns:
         ``(report, fallback_used, usage)`` — ``fallback_used`` is True when
@@ -197,6 +199,7 @@ async def compose_roast(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
             response_model=RoastReport,
+            chain=chain,
         )
         report = result.data
         if not isinstance(report, RoastReport):
