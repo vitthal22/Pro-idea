@@ -40,7 +40,11 @@ class UserRepository(Protocol):
 
     async def get_by_id(self, user_id: UUID) -> User | None: ...
 
-    async def create(self, *, email: str, name: str, password_hash: str) -> User: ...
+    async def create(
+        self, *, email: str, name: str, password_hash: str, tier: str = "free"
+    ) -> User: ...
+
+    async def update_tier(self, user_id: UUID, tier: str) -> User | None: ...
 
 
 def normalize_email(email: str) -> str:
@@ -80,7 +84,9 @@ class InMemoryUserRepository:
         async with self._lock:
             return self._by_id.get(user_id)
 
-    async def create(self, *, email: str, name: str, password_hash: str) -> User:
+    async def create(
+        self, *, email: str, name: str, password_hash: str, tier: str = "free"
+    ) -> User:
         async with self._lock:
             normalized = normalize_email(email)
             if normalized in self._by_email:
@@ -89,9 +95,18 @@ class InMemoryUserRepository:
                 email=normalized,
                 name=name,
                 password_hash=password_hash,
+                tier=tier,
             )
             self._by_email[normalized] = user
             self._by_id[user.id] = user
+            return user
+
+    async def update_tier(self, user_id: UUID, tier: str) -> User | None:
+        async with self._lock:
+            user = self._by_id.get(user_id)
+            if user is None:
+                return None
+            user.tier = tier
             return user
 
 
@@ -112,7 +127,9 @@ class PostgresUserRepository:
         row = await self._session.get(UserModel, user_id)
         return _to_domain(row) if row is not None else None
 
-    async def create(self, *, email: str, name: str, password_hash: str) -> User:
+    async def create(
+        self, *, email: str, name: str, password_hash: str, tier: str = "free"
+    ) -> User:
         """Insert a user and commit.
 
         Raises ``ValueError`` when the email is taken — the same contract as
@@ -122,6 +139,7 @@ class PostgresUserRepository:
             email=normalize_email(email),
             name=name,
             password_hash=password_hash,
+            tier=tier,
         )
         self._session.add(row)
         try:
@@ -129,6 +147,16 @@ class PostgresUserRepository:
         except IntegrityError as exc:
             await self._session.rollback()
             raise ValueError("email already exists") from exc
+        await self._session.refresh(row)
+        return _to_domain(row)
+
+    async def update_tier(self, user_id: UUID, tier: str) -> User | None:
+        """Set a user's tier and commit; ``None`` when the id is unknown."""
+        row = await self._session.get(UserModel, user_id)
+        if row is None:
+            return None
+        row.tier = tier
+        await self._session.commit()
         await self._session.refresh(row)
         return _to_domain(row)
 

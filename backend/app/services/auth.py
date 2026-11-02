@@ -4,13 +4,18 @@ No HTTP concerns here — routers pass payloads in and receive domain
 objects/schemas. Cookies live in the router (HTTP layer).
 """
 
+import asyncio
 from dataclasses import dataclass
 from uuid import UUID
 
 import jwt
 
 from app.api.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
-from app.common.exceptions import AuthenticationError, ConflictError
+from app.common.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    RateLimitError,
+)
 from app.common.security import (
     create_access_token,
     create_refresh_token,
@@ -19,6 +24,7 @@ from app.common.security import (
     verify_password,
 )
 from app.config import settings
+from app.services.login_throttle import LoginThrottle
 from app.services.token_denylist import TokenDenylist
 from app.services.user_repository import User, UserRepository
 
@@ -39,9 +45,11 @@ class AuthService:
         self,
         repository: UserRepository,
         denylist: TokenDenylist,
+        throttle: LoginThrottle | None = None,
     ) -> None:
         self._repository = repository
         self._denylist = denylist
+        self._throttle = throttle
 
     async def register(self, payload: RegisterRequest) -> AuthSession:
         """Create an account and start a session.
@@ -58,7 +66,11 @@ class AuthService:
             user = await self._repository.create(
                 email=payload.email,
                 name=payload.name,
-                password_hash=hash_password(payload.password),
+                # bcrypt is CPU-bound (~270 ms): keep it off the event loop.
+                password_hash=await asyncio.to_thread(
+                    hash_password,
+                    payload.password,
+                ),
             )
         except ValueError as exc:
             # Lost a race against a concurrent register with the same email;
@@ -69,13 +81,31 @@ class AuthService:
             ) from exc
         return self._start_session(user)
 
-    async def login(self, payload: LoginRequest) -> AuthSession:
+    async def login(
+        self,
+        payload: LoginRequest,
+        *,
+        client_key: str | None = None,
+    ) -> AuthSession:
         """Verify credentials and start a session.
 
         Raises ``AuthenticationError`` for unknown email or wrong password
-        (same message for both — no account enumeration).
+        (same message for both — no account enumeration) and
+        ``RateLimitError`` once too many failures were recorded for
+        ``client_key``. A successful login clears the failure counter.
         """
-        user = await self._authenticate(payload.email, payload.password)
+        if client_key and self._throttle and self._throttle.is_blocked(client_key):
+            raise RateLimitError(
+                message="Too many failed login attempts. Try again later.",
+            )
+        try:
+            user = await self._authenticate(payload.email, payload.password)
+        except AuthenticationError:
+            if client_key and self._throttle:
+                self._throttle.record_failure(client_key)
+            raise
+        if client_key and self._throttle:
+            self._throttle.reset(client_key)
         return self._start_session(user)
 
     async def refresh(self, refresh_token: str | None) -> AuthSession:
@@ -111,7 +141,14 @@ class AuthService:
     async def _authenticate(self, email: str, password: str) -> User:
         """Return the user for valid credentials, else raise 401."""
         user = await self._repository.get_by_email(email)
-        if user is None or not verify_password(password, user.password_hash):
+        if user is None:
+            raise AuthenticationError(message="Invalid email or password")
+        # bcrypt verify is CPU-bound: run it in a worker thread.
+        if not await asyncio.to_thread(
+            verify_password,
+            password,
+            user.password_hash,
+        ):
             raise AuthenticationError(message="Invalid email or password")
         return user
 

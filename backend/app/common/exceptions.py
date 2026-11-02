@@ -52,6 +52,13 @@ class ValidationError(AppException):
     code = "VALIDATION_ERROR"
 
 
+class RateLimitError(AppException):
+    """Raised when a client hits a rate/throttle limit."""
+
+    status_code = 429
+    code = "RATE_LIMITED"
+
+
 class ConflictError(AppException):
     """Raised when a resource already exists (e.g. duplicate email)."""
 

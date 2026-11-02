@@ -4,12 +4,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_v1_router
 from app.common.exceptions import AppException
 from app.common.logging import app_logger, setup_logging
+from app.common.middleware import setup_middleware
 from app.config import settings
 from app.db.seed import seed_demo_user
 from app.db.session import dispose_engine
@@ -35,13 +35,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+setup_middleware(app)
 
 
 @app.exception_handler(AppException)

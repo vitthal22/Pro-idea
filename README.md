@@ -110,7 +110,9 @@ This creates the `users` table. The backend seeds the demo account on startup
 ### Demo login
 
 Login is **email + password only** — no OTP, no email verification, no confirmation
-step. The seeded account:
+step. Failed logins are throttled: after `LOGIN_RATE_LIMIT_PER_HOUR` failures (default
+10) for the same email + client within an hour, login returns `429 RATE_LIMITED` until
+the window passes. The seeded account:
 
 | Field | Value |
 |---|---|
@@ -120,6 +122,22 @@ step. The seeded account:
 Override it per environment with `DEMO_USER_EMAIL` / `DEMO_USER_PASSWORD` / `DEMO_USER_NAME`
 in `backend/.env`; leave them blank to skip seeding. Restart the backend and it logs
 `Demo user created` (first run) or `Demo user already exists` (later runs).
+
+### Resume upload
+
+All endpoints need `Authorization: Bearer <access_token>`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/resumes/upload` | Multipart `file` (PDF or DOCX) → `201`, text extracted on upload |
+| GET | `/api/v1/resumes` | List your resumes (newest first) |
+| GET | `/api/v1/resumes/{id}` | One resume with `raw_text` and `structured_data` |
+| DELETE | `/api/v1/resumes/{id}` | Soft-delete the record and remove the stored file → `204` |
+
+Limits and behaviour: PDF/DOCX only (verified from the bytes, not the file name),
+`MAX_FILE_SIZE_MB` enforced, text must look like a resume (≥100 words) or the upload
+returns `422` and the record is stored with `parsing_status: failed`. OCR for
+image-only PDFs is a V2 feature.
 
 ### 4. Run the backend
 
