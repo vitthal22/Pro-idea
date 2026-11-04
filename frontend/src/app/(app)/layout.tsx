@@ -89,7 +89,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 outline-none md:px-8 md:py-5"
+          className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 outline-none md:px-8 md:py-5"
         >
           {/* Without a token the page must not mount: otherwise its queries
               fire unauthenticated while the redirect is in flight (two 401s

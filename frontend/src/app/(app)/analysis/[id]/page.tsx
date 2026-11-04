@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileUp } from "lucide-react";
 
-import { RoastResult } from "@/components/analysis/RoastResult";
+import { RoastVerdict } from "@/components/analysis/RoastResult";
 import { StageProgress } from "@/components/analysis/StageProgress";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Button } from "@/components/ui/button";
@@ -124,10 +124,11 @@ export default function AnalysisPage({
       )}
 
       {!running && data.status === "completed" && data.result && (
-        <RoastResult
+        <RoastVerdict
           result={data.result}
           verdict={data.score_verdict}
           analysisType={data.analysis_type}
+          analysisId={id}
           action={
             <Button asChild variant="outline" size="sm">
               <Link href="/upload">
