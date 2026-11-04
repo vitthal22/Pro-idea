@@ -36,7 +36,7 @@ export function StatusBadge({ status }: { status: AnalysisStatus }) {
     return (
       <Badge
         variant="outline"
-        className="border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-500"
+        className="border-amber-700/40 bg-amber-700/10 text-amber-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-500"
         title="The roast hit an error and came back incomplete — open it to try again."
       >
         {STATUS_LABELS[status]}
@@ -46,5 +46,6 @@ export function StatusBadge({ status }: { status: AnalysisStatus }) {
   if (status === "failed") {
     return <Badge variant="destructive">{STATUS_LABELS[status]}</Badge>;
   }
-  return <Badge variant="default">{STATUS_LABELS[status]}</Badge>;
+  // Success is the default state — keep it quiet so failures stand out.
+  return <Badge variant="secondary">{STATUS_LABELS[status]}</Badge>;
 }

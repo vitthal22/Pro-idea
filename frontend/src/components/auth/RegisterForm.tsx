@@ -118,7 +118,7 @@ export function RegisterForm() {
   ];
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
         <CardTitle className="text-2xl">Create an account</CardTitle>
         <CardDescription>
@@ -126,7 +126,7 @@ export function RegisterForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-4" noValidate>
+        <form onSubmit={onSubmit} className="grid gap-5" noValidate>
           {fields.map((field) => (
             <div key={field.name} className="grid gap-2">
               <Label htmlFor={field.name}>{field.label}</Label>

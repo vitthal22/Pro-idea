@@ -11,7 +11,7 @@ const PARSING_STATUS: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
-  completed: { label: "Parsed", variant: "default" },
+  completed: { label: "Parsed", variant: "secondary" },
   pending: { label: "Processing", variant: "secondary" },
   failed: { label: "Failed", variant: "destructive" },
 };
@@ -20,7 +20,7 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/** One uploaded resume as a card row (no detail page exists yet). */
+/** One uploaded resume as a compact list row (no detail page exists yet). */
 export function ResumeRow({ resume }: { resume: ResumeResponse }) {
   const status = PARSING_STATUS[resume.parsing_status] ?? {
     label: resume.parsing_status,
@@ -28,12 +28,14 @@ export function ResumeRow({ resume }: { resume: ResumeResponse }) {
   };
 
   return (
-    // No resume detail page exists yet — the row is a card, not a link.
-    <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
-      <FileText className="size-5 shrink-0 text-muted-foreground" />
+    // No resume detail page exists yet — the row is not a link.
+    <div className="flex items-center gap-3 px-4 py-2">
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{resume.original_name}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="truncate text-sm leading-5 font-medium">
+          {resume.original_name}
+        </p>
+        <p className="text-xs leading-4 text-muted-foreground">
           {formatSize(resume.file_size)} • {formatDate(resume.created_at)}
         </p>
       </div>

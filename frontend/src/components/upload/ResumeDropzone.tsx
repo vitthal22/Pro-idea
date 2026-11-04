@@ -63,7 +63,7 @@ export function ResumeDropzone({
   return (
     <div
       {...getRootProps()}
-      className={`group cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+      className={`group cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-all sm:p-8 ${
         isDragActive
           ? "border-primary bg-primary/5 shadow-[0_0_40px_-12px] shadow-primary/50"
           : "border-border hover:border-primary/60 hover:bg-card"
@@ -71,7 +71,7 @@ export function ResumeDropzone({
     >
       <input {...getInputProps()} aria-label="Resume file" />
       <motion.span
-        className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-primary"
+        className="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-primary/15 text-primary"
         animate={
           isDragActive
             ? { scale: [1, 1.12, 1], rotate: [0, -4, 4, 0] }

@@ -33,7 +33,7 @@ export function StageProgress({ status }: { status: string }) {
         className="bg-glow-ember pointer-events-none absolute -inset-6 animate-pulse"
         aria-hidden
       />
-      <div className="relative rounded-2xl border border-primary/25 bg-card p-8 text-center">
+      <div className="relative rounded-xl border border-primary/25 bg-card p-6 text-center">
         <motion.span
           className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-primary/15 text-primary"
           animate={{ scale: [1, 1.1, 1] }}
@@ -48,7 +48,7 @@ export function StageProgress({ status }: { status: string }) {
           three minutes — you can leave this page, your roast will be waiting.
         </p>
 
-        <div className="mt-6 h-2 overflow-hidden rounded-full bg-muted">
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-primary to-amber-500"
             initial={{ width: "4%" }}
@@ -57,14 +57,14 @@ export function StageProgress({ status }: { status: string }) {
           />
         </div>
 
-        <ol className="mt-6 space-y-2 text-left">
+        <ol className="mt-5 space-y-1.5 text-left">
           {STAGES.map((stage, index) => {
             const done = currentIndex > index;
             const active = currentIndex === index;
             return (
               <li
                 key={stage.key}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                className={`flex items-center gap-3 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                   active
                     ? "bg-primary/10 font-medium text-primary"
                     : done

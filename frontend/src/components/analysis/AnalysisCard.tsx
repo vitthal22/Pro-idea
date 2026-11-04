@@ -1,51 +1,43 @@
 "use client";
 
-import { motion } from "framer-motion";
 import Link from "next/link";
 
 import { ScoreRing } from "@/components/analysis/score-ring";
 import { StatusBadge } from "@/components/shared/status-badge";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { analysisModeLabel } from "@/lib/analysis-modes";
 import { isRunningStatus, type AnalysisListItem } from "@/types/analysis";
 
+/**
+ * One roast as a compact list row. The parent owns the container (border +
+ * `divide-y`), so rows never stack their own padding and borders.
+ */
 export function AnalysisCard({ analysis }: { analysis: AnalysisListItem }) {
   const created = formatDate(analysis.created_at);
   const running = isRunningStatus(analysis.status);
 
   return (
-    <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
-      <Link href={`/analysis/${analysis.id}`} className="block">
-        <Card className="transition-colors hover:border-primary/50">
-          <CardHeader>
-            <div className="flex items-center gap-4">
-              {analysis.overall_score !== null ? (
-                <ScoreRing score={analysis.overall_score} size={52} />
-              ) : (
-                <span
-                  className="size-11 shrink-0 rounded-full border-2 border-dashed border-border"
-                  aria-hidden
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <CardTitle className="text-base">
-                  {analysisModeLabel(analysis.analysis_type)} analysis
-                </CardTitle>
-                <CardDescription>
-                  {running ? "Roasting now — tap to watch live" : `Created ${created}`}
-                </CardDescription>
-              </div>
-              <StatusBadge status={analysis.status} />
-            </div>
-          </CardHeader>
-        </Card>
-      </Link>
-    </motion.div>
+    <Link
+      href={`/analysis/${analysis.id}`}
+      className="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/40"
+    >
+      {analysis.overall_score !== null ? (
+        <ScoreRing score={analysis.overall_score} size={40} />
+      ) : (
+        <span
+          className="size-10 shrink-0 rounded-full border-2 border-dashed border-border"
+          aria-hidden
+        />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">
+          {analysisModeLabel(analysis.analysis_type)} analysis
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {running ? "Roasting now — tap to watch live" : `Created ${created}`}
+        </span>
+      </span>
+      <StatusBadge status={analysis.status} />
+    </Link>
   );
 }

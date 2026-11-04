@@ -9,11 +9,21 @@ import {
   type AnalysisListResponse,
 } from "@/types/analysis";
 
+interface AnalysesParams {
+  limit?: number;
+  offset?: number;
+}
+
 /** List the current user's analyses (roasts), newest first. */
-export function useAnalyses() {
+export function useAnalyses({ limit, offset }: AnalysesParams = {}) {
+  const query = new URLSearchParams();
+  if (limit !== undefined) query.set("limit", String(limit));
+  if (offset !== undefined) query.set("offset", String(offset));
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+
   return useQuery({
-    queryKey: ["analyses"],
-    queryFn: () => apiFetch<AnalysisListResponse>("/api/v1/analyses"),
+    queryKey: ["analyses", limit ?? "default", offset ?? 0],
+    queryFn: () => apiFetch<AnalysisListResponse>(`/api/v1/analyses${suffix}`),
   });
 }
 

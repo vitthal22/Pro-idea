@@ -31,7 +31,7 @@ import { useCurrentUser } from "@/hooks/queries/use-auth";
 import { useAuthStore } from "@/stores/auth-store";
 
 const MODE_OPTION_CLASS =
-  "cursor-pointer rounded-xl border p-3 text-left transition-colors has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/10";
+  "cursor-pointer rounded-xl border p-2.5 text-left transition-colors has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/10";
 
 export default function UploadPage() {
   const { isPending, isError, error } = useCurrentUser();
@@ -102,7 +102,7 @@ export default function UploadPage() {
 
   if (!token) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+      <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 text-center">
         <p className="font-medium">
           Please{" "}
           <a href="/login" className="font-medium underline">
@@ -116,7 +116,7 @@ export default function UploadPage() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+      <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 text-center">
         <p className="font-medium">Loading…</p>
         <Skeleton className="mt-4 h-6 w-48" />
       </div>
@@ -125,7 +125,7 @@ export default function UploadPage() {
 
   if (isError) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+      <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 text-center">
         <p className="font-medium">Could not load your profile</p>
         <p className="mt-1 text-destructive">
           {error instanceof Error
@@ -149,13 +149,13 @@ export default function UploadPage() {
   const busy = upload.isPending || startAnalysis.isPending;
 
   return (
-    <div>
+    <div className="w-full max-w-2xl">
       <PageHeader
         title="Upload Resume"
         description="Pick how hard to roast, drop the file — the experts start automatically."
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <ResumeDropzone
           onFileSelected={handleFileSelected}
           onFileError={handleFileError}
@@ -190,7 +190,7 @@ export default function UploadPage() {
 
         <div>
           <Label className="mb-2 block">Roast mode</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {ANALYSIS_MODES.map((option) => (
               <label key={option.value} className={MODE_OPTION_CLASS}>
                 <input
