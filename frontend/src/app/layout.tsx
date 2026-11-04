@@ -4,21 +4,26 @@ import { AppProviders } from "@/providers/app-providers";
 import { ThemeProvider } from "@/providers/theme-provider";
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Instrument_Sans, Spline_Sans_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const display = Bricolage_Grotesque({
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const sans = Instrument_Sans({
+  variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+const mono = Spline_Sans_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "AI Resume Brutal Roaster",
+  title: "Resume Roaster — brutally honest AI resume feedback",
   description:
     "AI-powered resume analysis with a multi-evaluator pipeline that delivers brutally honest, constructive feedback.",
 };
@@ -34,7 +39,7 @@ export default function RootLayout({
       // next-themes sets the class before hydration; without this React
       // warns about the mismatch it created on purpose.
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider>

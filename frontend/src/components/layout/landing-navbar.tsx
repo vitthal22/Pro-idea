@@ -14,7 +14,7 @@ export function LandingNavbar() {
   return (
     <header className="glass-card sticky top-0 z-40 border-x-0 border-t-0">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold">
+        <Link href="/" className="flex items-center gap-2.5 font-heading font-bold tracking-tight">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
             <Flame className="size-4.5" />
           </span>

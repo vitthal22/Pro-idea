@@ -15,7 +15,7 @@ export function StatTile({ icon, label, value, hint }: StatTileProps) {
         {icon}
         <span className="text-sm">{label}</span>
       </div>
-      <p className="mt-2 text-3xl font-bold">{value}</p>
+      <p className="mt-2 font-mono text-3xl font-bold tabular-nums">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );

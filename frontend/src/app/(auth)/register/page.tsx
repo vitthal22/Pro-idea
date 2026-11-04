@@ -16,7 +16,7 @@ export default function RegisterPage() {
       />
       <Link
         href="/"
-        className="relative mb-8 flex items-center gap-2.5 text-lg font-semibold"
+        className="relative mb-8 flex items-center gap-2.5 font-heading text-lg font-bold tracking-tight"
       >
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <Flame className="size-5" />

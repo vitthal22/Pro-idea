@@ -49,7 +49,7 @@ export function ScoreRing({ score, size = 72 }: { score: number; size?: number }
         />
       </svg>
       <span
-        className={`absolute font-bold ${tone} ${
+        className={`absolute font-mono font-bold tabular-nums ${tone} ${
           size >= 100 ? "text-4xl" : "text-sm"
         }`}
       >

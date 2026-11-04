@@ -41,7 +41,7 @@ function Brand() {
         <Flame className="size-5" />
       </span>
       <span>
-        <span className="block font-semibold leading-tight">Resume Roaster</span>
+        <span className="block font-heading text-[15px] font-bold leading-tight tracking-tight">Resume Roaster</span>
         <span className="block text-xs text-muted-foreground">Get roasted. Get better.</span>
       </span>
     </Link>
