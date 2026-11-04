@@ -187,41 +187,31 @@ function ScoreDial({
   const arc = (circumference * (90 - gap)) / 360;
   const center = size / 2;
 
-  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
-
   const label = metrics
     .map((metric) => `${metric.label} ${metric.value ?? "no data"}`)
     .join(", ");
 
-  const arcMidpoint = (index: number) => {
-    const degrees = -90 + index * 90 + gap / 2 + (90 - gap) / 2;
-    const radians = (degrees * Math.PI) / 180;
-    return {
-      x: center + Math.cos(radians) * radius,
-      y: center + Math.sin(radians) * radius,
-    };
-  };
-
   const activeMetric = active === null ? null : metrics[active];
-  const position = tip ?? (active === null ? null : arcMidpoint(active));
 
   return (
     <div className="relative size-[240px] shrink-0">
       <svg
         viewBox={`0 0 ${size} ${size}`}
         className="size-full"
+        style={{ overflow: "visible" }}
         role="img"
         aria-label={`Overall ${score} of 100. ${label}.`}
-        onMouseLeave={() => {
-          onActive(null);
-          setTip(null);
-        }}
+        onMouseLeave={() => onActive(null)}
       >
         {metrics.map((metric, index) => {
           const startAngle = -90 + index * 90 + gap / 2;
           const metricTone = metric.value === null ? null : tone(metric.value);
           const isActive = active === index;
           const dimmed = active !== null && !isActive;
+          const filled =
+            metric.value === null
+              ? 0
+              : (arc * Math.min(100, Math.max(0, metric.value))) / 100;
 
           return (
             <g key={metric.label} transform={`rotate(${startAngle} ${center} ${center})`}>
@@ -232,8 +222,13 @@ function ScoreDial({
                 fill="none"
                 strokeWidth={stroke}
                 strokeLinecap="butt"
-                className="stroke-muted/50"
+                className={`transition-[stroke] duration-150 ${
+                  isActive ? "stroke-foreground/25" : "stroke-muted/50"
+                }`}
                 strokeDasharray={`${arc} ${circumference}`}
+                style={{
+                  filter: isActive ? "drop-shadow(0 0 6px currentColor)" : undefined,
+                }}
               />
               {metric.value !== null && metricTone && (
                 <circle
@@ -242,62 +237,76 @@ function ScoreDial({
                   r={radius}
                   fill="none"
                   strokeLinecap="butt"
-                  className={`${metricTone.stroke} ${metricTone.text} cursor-default transition-[stroke-width,opacity] duration-150`}
+                  className={`pointer-events-none transition-opacity duration-150 ${metricTone.text}`}
+                  stroke="currentColor"
                   style={{
-                    filter: isActive ? "drop-shadow(0 0 6px currentColor)" : undefined,
-                    opacity: dimmed ? 0.3 : 1,
+                    opacity: dimmed ? 0.22 : 1,
+                    filter:
+                      isActive && filled > 0
+                        ? "drop-shadow(0 0 7px currentColor)"
+                        : undefined,
                   }}
-                  strokeWidth={isActive ? 20 : stroke}
-                  strokeDasharray={`${
-                    (arc * Math.min(100, Math.max(0, metric.value))) / 100
-                  } ${circumference}`}
-                  onMouseEnter={() => onActive(index)}
-                  onMouseMove={(event) => {
-                    const box = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                    if (!box) return;
-                    setTip({
-                      x: event.clientX - box.left,
-                      y: event.clientY - box.top,
-                    });
-                  }}
+                  strokeWidth={stroke}
+                  strokeDasharray={`${filled} ${circumference}`}
                 />
               )}
+              {/* Invisible hit band over the full section, so hovering the
+                  empty remainder highlights the same quadrant. */}
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={stroke + 14}
+                strokeDasharray={`${arc} ${circumference}`}
+                className="cursor-default"
+                style={{ pointerEvents: "stroke" }}
+                onMouseEnter={() => onActive(index)}
+              />
             </g>
           );
         })}
       </svg>
 
+      {/* The hole doubles as the detail panel: hovering a section swaps the
+          score for that section's read-out, so nothing floats over the page. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="flex items-baseline gap-1">
-          <span className="font-mono text-[60px] leading-none font-bold tabular-nums">
-            {score}
-          </span>
-          <span className="text-xs text-muted-foreground">/ 100</span>
-        </div>
-      </div>
-
-      {active !== null && activeMetric && position && (
-        <div
-          className="pointer-events-none absolute z-20 w-[200px] -translate-x-1/2 -translate-y-[120%] rounded-lg border border-border bg-popover p-2.5 shadow-lg"
-          style={{ left: position.x, top: position.y }}
-          role="status"
-        >
-          <p className="flex items-baseline justify-between gap-2">
-            <span className="text-xs font-semibold">{activeMetric.label}</span>
-            <span className="font-mono text-[11px] tabular-nums">
-              {activeMetric.value ?? "—"}/100
-            </span>
-          </p>
-          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-            {activeMetric.meaning}
-          </p>
-          {activeMetric.weight !== null && (
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-              weight {Math.round(activeMetric.weight * 100)}%
+        {active !== null && activeMetric ? (
+          <div className="w-[172px] text-center" role="status">
+            <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-muted-foreground">
+              {activeMetric.label}
             </p>
-          )}
-        </div>
-      )}
+            <p
+              className={`mt-1 font-mono text-[26px] leading-none font-semibold tabular-nums ${
+                activeMetric.value !== null
+                  ? tone(activeMetric.value).text
+                  : "text-muted-foreground"
+              }`}
+            >
+              {activeMetric.value ?? "—"}
+              <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">
+                /100
+              </span>
+            </p>
+            <p className="mt-1.5 text-[10px] leading-[1.4] text-muted-foreground">
+              {activeMetric.meaning}
+            </p>
+            {activeMetric.weight !== null && (
+              <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                weight {Math.round(activeMetric.weight * 100)}%
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-1">
+            <span className="font-mono text-[60px] leading-none font-bold tabular-nums">
+              {score}
+            </span>
+            <span className="text-xs text-muted-foreground">/ 100</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

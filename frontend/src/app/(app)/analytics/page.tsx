@@ -2,6 +2,7 @@
 
 import { Flame, History, Target, Trophy, Upload } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -100,6 +101,11 @@ function ActivityFeed({ items }: { items: AnalysisListItem[] }) {
 export default function AnalyticsPage() {
   const roasts = useAnalyses();
   const resumes = useResumes();
+  const { resolvedTheme } = useTheme();
+
+  // Concrete hexes: `var()` inside an SVG attribute does not repaint reliably.
+  const accent = resolvedTheme === "light" ? "#C24700" : "#F97C3D";
+  const surface = resolvedTheme === "light" ? "#FFFFFF" : "#15110D";
 
   const header = (
     <PageHeader
@@ -204,11 +210,14 @@ export default function AnalyticsPage() {
             No scored roasts yet — still waiting on the first results.
           </p>
         ) : (
-          <ChartContainer
-            config={trendConfig}
-            className="h-56 w-full [&_.recharts-area-area]:fill-chart-1 [&_.recharts-area-curve]:stroke-chart-1 [&_.recharts-area-dot]:fill-chart-1 [&_.recharts-area-dot]:stroke-chart-1"
-          >
-            <AreaChart data={trend} margin={{ left: -20, right: 8 }}>
+          <ChartContainer config={trendConfig} className="h-64 w-full">
+            <AreaChart data={trend} margin={{ left: -18, right: 8, top: 4 }}>
+              <defs>
+                <linearGradient id="score-trend-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={accent} stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={accent} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis
                 dataKey="date"
@@ -221,14 +230,25 @@ export default function AnalyticsPage() {
                   index > 0 && trend[index - 1]?.date === value ? "" : value
                 }
               />
-              <YAxis domain={[0, 100]} tickLine={false} axisLine={false} fontSize={12} />
-              <ChartTooltip content={<ChartTooltipContent />} />
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 50, 100]}
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+              />
+              <ChartTooltip
+                content={<ChartTooltipContent />}
+                cursor={{ stroke: accent, strokeOpacity: 0.35, strokeDasharray: "3 3" }}
+              />
               <Area
                 dataKey="score"
                 type="monotone"
-                fillOpacity={0.25}
-                strokeWidth={2}
-                dot={{ r: 3 }}
+                stroke={accent}
+                strokeWidth={2.5}
+                fill="url(#score-trend-fill)"
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: surface, fill: accent }}
                 isAnimationActive={false}
               />
             </AreaChart>
