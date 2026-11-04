@@ -7,16 +7,20 @@ interface StatTileProps {
   hint?: string;
 }
 
-/** One bento stat tile: icon + label, big value, optional hint. */
+/** One compact stat tile: label left, value right, optional hint below. */
 export function StatTile({ icon, label, value, hint }: StatTileProps) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-sm">{label}</span>
+    <div className="h-full rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          {icon}
+          {label}
+        </span>
+        <span className="font-mono text-2xl leading-none font-bold tabular-nums">
+          {value}
+        </span>
       </div>
-      <p className="mt-2 text-3xl font-bold">{value}</p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

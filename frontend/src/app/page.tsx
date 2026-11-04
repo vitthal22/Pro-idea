@@ -32,7 +32,7 @@ function reveal() {
   return {
     initial: "hidden" as const,
     whileInView: "show" as const,
-    viewport: { once: true, margin: "-80px" },
+    viewport: { once: true, margin: "-40px" },
   };
 }
 
@@ -63,7 +63,7 @@ function AuthButtons({ size = "lg" }: { size?: "default" | "lg" }) {
 /** A CSS-built mock of the result page — no screenshot needed. */
 function ProductMock() {
   return (
-    <div className="relative mx-auto mt-14 max-w-3xl">
+    <div className="relative mx-auto mt-10 max-w-3xl">
       <div
         className="bg-glow-ember pointer-events-none absolute -inset-x-8 -top-10 h-40"
         aria-hidden
@@ -79,9 +79,9 @@ function ProductMock() {
           </span>
         </div>
 
-        <div className="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-center">
+        <div className="grid gap-5 p-5 sm:grid-cols-[auto_1fr] sm:items-center">
           <div className="flex flex-col items-center gap-1">
-            <ScoreRing score={69} size={110} />
+            <ScoreRing score={69} size={96} />
             <span className="text-xs text-muted-foreground">roast score</span>
           </div>
           <div className="min-w-0">
@@ -162,7 +162,7 @@ function HowItWorks() {
   ];
 
   return (
-    <section className="mx-auto mt-28 max-w-4xl px-4">
+    <section className="mx-auto mt-20 max-w-5xl px-4">
       <motion.h2
         {...reveal()}
         className="text-center text-3xl font-bold tracking-tight"
@@ -172,7 +172,7 @@ function HowItWorks() {
       <motion.div
         {...reveal()}
         variants={stagger}
-        className="mt-10 grid gap-6 md:grid-cols-3"
+        className="mt-8 grid gap-5 md:grid-cols-3"
       >
         {steps.map((step, index) => (
           <motion.div key={step.title} variants={fadeUp} className="relative">
@@ -200,7 +200,7 @@ export default function LandingPage() {
 
       <main className="flex-1 overflow-x-clip">
         {/* Hero */}
-        <section className="relative px-4 pt-20 pb-16 text-center">
+        <section className="relative px-4 pt-10 pb-10 text-center">
           <div
             className="bg-glow-ember pointer-events-none absolute inset-x-0 -top-32 mx-auto h-[480px] max-w-4xl"
             aria-hidden
@@ -219,22 +219,22 @@ export default function LandingPage() {
             </motion.div>
             <motion.h1
               variants={fadeUp}
-              className="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-6xl"
+              className="mt-3 text-4xl font-bold tracking-tight text-balance sm:text-6xl"
             >
               Your resume, <span className="text-gradient-ember">brutally roasted</span>.
             </motion.h1>
             <motion.p
               variants={fadeUp}
-              className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground"
+              className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground"
             >
               Upload a resume and four specialized AI evaluators — recruiter,
               ATS, technical, writing — tear it apart. You get one honest
               score, every weakness ranked, and a fix list. Constructive,
               never generic.
             </motion.p>
-            <motion.div variants={fadeUp} className="mt-8">
+            <motion.div variants={fadeUp} className="mt-6">
               <AuthButtons />
-              <p className="mt-4 text-xs text-muted-foreground">
+              <p className="mt-3 text-xs text-muted-foreground">
                 3 free roasts • No credit card • About 2 minutes
               </p>
             </motion.div>
@@ -250,7 +250,7 @@ export default function LandingPage() {
         </section>
 
         {/* Features bento */}
-        <section className="mx-auto mt-24 max-w-5xl px-4">
+        <section className="mx-auto mt-20 max-w-5xl px-4">
           <motion.h2
             {...reveal()}
             className="text-center text-3xl font-bold tracking-tight"
@@ -261,13 +261,13 @@ export default function LandingPage() {
           <motion.div
             {...reveal()}
             variants={stagger}
-            className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
           >
             {FEATURES.map((feature) => (
               <motion.div
                 key={feature.title}
                 variants={fadeUp}
-                className={`rounded-2xl border border-border bg-card p-6 ${
+                className={`flex h-full flex-col rounded-xl border border-border bg-card p-5 ${
                   feature.wide ? "sm:col-span-2 lg:col-span-2" : ""
                 }`}
               >
@@ -279,7 +279,7 @@ export default function LandingPage() {
                   {feature.description}
                 </p>
                 {feature.chips && (
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-auto flex flex-wrap gap-2 pt-4">
                     {feature.chips.map((chip) => (
                       <Badge key={chip} variant="secondary">
                         {chip}
@@ -291,7 +291,7 @@ export default function LandingPage() {
             ))}
             <motion.div
               variants={fadeUp}
-              className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6"
+              className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-5"
             >
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary/20 text-primary">
                 <Flame className="size-5" />
@@ -314,10 +314,10 @@ export default function LandingPage() {
         <HowItWorks />
 
         {/* Final CTA */}
-        <section className="mx-auto mt-28 max-w-4xl px-4">
+        <section className="mx-auto mt-20 max-w-5xl px-4 pb-20">
           <motion.div
             {...reveal()}
-            className="relative overflow-hidden rounded-3xl border border-primary/30 p-10 text-center"
+            className="relative overflow-hidden rounded-3xl border border-primary/30 p-8 text-center"
           >
             <div
               className="bg-glow-ember pointer-events-none absolute inset-0"
@@ -332,7 +332,7 @@ export default function LandingPage() {
                 Honest feedback stings for a minute. A rejected application
                 stings for weeks.
               </p>
-              <div className="mt-7">
+              <div className="mt-6">
                 <AuthButtons />
               </div>
             </div>
@@ -340,7 +340,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="mt-24 border-t border-border py-8">
+      <footer className="border-t border-border py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 text-sm text-muted-foreground sm:flex-row">
           <span className="flex items-center gap-2">
             <Flame className="size-4 text-primary" aria-hidden />

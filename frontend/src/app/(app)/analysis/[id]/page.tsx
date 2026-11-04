@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileUp } from "lucide-react";
 
-import { RoastResult } from "@/components/analysis/RoastResult";
+import { RoastVerdict } from "@/components/analysis/RoastResult";
 import { StageProgress } from "@/components/analysis/StageProgress";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader } from "@/components/layout/page-header";
 import { useStartAnalysis } from "@/hooks/mutations/use-start-analysis";
 import { useAnalysisStream } from "@/hooks/use-analysis-stream";
 import { useAnalysis } from "@/hooks/queries/use-analyses";
@@ -98,7 +97,7 @@ export default function AnalysisPage({
       {running && <StageProgress status={data.status} />}
 
       {!running && (data.status === "failed" || data.status === "partial") && (
-        <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+        <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 text-center">
           <h2 className="text-xl font-semibold">
             {data.status === "failed" ? "The roast burned" : "The roast didn't finish"}
           </h2>
@@ -125,24 +124,20 @@ export default function AnalysisPage({
       )}
 
       {!running && data.status === "completed" && data.result && (
-        <>
-          <PageHeader
-            title="Your roast"
-            actions={
-              <Button asChild variant="outline">
-                <Link href="/upload">
-                  <FileUp className="size-4" />
-                  Roast another
-                </Link>
-              </Button>
-            }
-          />
-          <RoastResult
-            result={data.result}
-            verdict={data.score_verdict}
-            analysisType={data.analysis_type}
-          />
-        </>
+        <RoastVerdict
+          result={data.result}
+          verdict={data.score_verdict}
+          analysisType={data.analysis_type}
+          analysisId={id}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/upload">
+                <FileUp className="size-4" />
+                Roast another
+              </Link>
+            </Button>
+          }
+        />
       )}
     </div>
   );

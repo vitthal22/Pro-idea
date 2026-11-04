@@ -58,13 +58,13 @@ function buildChartData(items: AnalysisListItem[]) {
 function ActivityFeed({ items }: { items: AnalysisListItem[] }) {
   const recent = items.slice(0, 6);
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-2">
       {recent.map((item) => {
         const running = isRunningStatus(item.status);
         return (
-          <li key={item.id} className="flex items-center gap-3 text-sm">
+          <li key={item.id} className="flex items-center gap-3">
             {item.overall_score !== null ? (
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-xs font-bold text-primary">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-xs font-bold text-primary tabular-nums">
                 {Math.round(item.overall_score)}
               </span>
             ) : (
@@ -72,22 +72,24 @@ function ActivityFeed({ items }: { items: AnalysisListItem[] }) {
                 <History className="size-4" />
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate">
-              {running ? (
-                <span>{analysisModeLabel(item.analysis_type)} analysis</span>
-              ) : (
-                <Link
-                  href={`/analysis/${item.id}`}
-                  className="hover:text-primary hover:underline"
-                >
-                  {analysisModeLabel(item.analysis_type)} analysis
-                </Link>
-              )}
-            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm leading-5">
+                {running ? (
+                  <span>{analysisModeLabel(item.analysis_type)} analysis</span>
+                ) : (
+                  <Link
+                    href={`/analysis/${item.id}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {analysisModeLabel(item.analysis_type)} analysis
+                  </Link>
+                )}
+              </p>
+              <p className="text-xs leading-4 text-muted-foreground">
+                {formatShortDate(item.created_at)}
+              </p>
+            </div>
             {item.status !== "completed" && <StatusBadge status={item.status} />}
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {formatShortDate(item.created_at)}
-            </span>
           </li>
         );
       })}
@@ -99,31 +101,41 @@ export default function AnalyticsPage() {
   const roasts = useAnalyses();
   const resumes = useResumes();
 
+  const header = (
+    <PageHeader
+      title="Analytics"
+      description="What the experts have said about your resumes so far."
+    />
+  );
+
   if (roasts.isPending || resumes.isPending) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-56" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-6">
+        {header}
+        <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl" />
+            <Skeleton key={i} className="h-16 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   if (roasts.isError) {
     return (
-      <ErrorState
-        title="Could not load analytics"
-        description={
-          roasts.error instanceof Error
-            ? roasts.error.message
-            : "An unexpected error occurred."
-        }
-        onRetry={() => roasts.refetch()}
-      />
+      <div className="space-y-6">
+        {header}
+        <ErrorState
+          title="Could not load analytics"
+          description={
+            roasts.error instanceof Error
+              ? roasts.error.message
+              : "An unexpected error occurred."
+          }
+          onRetry={() => roasts.refetch()}
+        />
+      </div>
     );
   }
 
@@ -157,13 +169,10 @@ export default function AnalyticsPage() {
   const failedCount = items.filter((item) => item.status === "failed").length;
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Analytics"
-        description="What the experts have said about your resumes so far."
-      />
+    <div className="space-y-6">
+      {header}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <StatTile
           icon={<Flame className="size-4 text-primary" />}
           label="Roasts"
@@ -188,36 +197,48 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-6">
-        <h2 className="mb-4 font-semibold">Score trend</h2>
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-3 text-sm font-semibold">Score trend</h2>
         {trend.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No scored roasts yet — still waiting on the first results.
           </p>
         ) : (
-          <ChartContainer config={trendConfig} className="h-56 w-full">
+          <ChartContainer
+            config={trendConfig}
+            className="h-56 w-full [&_.recharts-area-area]:fill-chart-1 [&_.recharts-area-curve]:stroke-chart-1 [&_.recharts-area-dot]:fill-chart-1 [&_.recharts-area-dot]:stroke-chart-1"
+          >
             <AreaChart data={trend} margin={{ left: -20, right: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={12} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+                // Several roasts can share a day: label the first point of
+                // each day and leave the repeats blank so the axis is readable.
+                tickFormatter={(value: string, index: number) =>
+                  index > 0 && trend[index - 1]?.date === value ? "" : value
+                }
+              />
               <YAxis domain={[0, 100]} tickLine={false} axisLine={false} fontSize={12} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Area
                 dataKey="score"
                 type="monotone"
-                fill="var(--color-score)"
                 fillOpacity={0.25}
-                stroke="var(--color-score)"
                 strokeWidth={2}
-                dot={{ r: 3, fill: "var(--color-score)" }}
+                dot={{ r: 3 }}
+                isAnimationActive={false}
               />
             </AreaChart>
           </ChartContainer>
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="mb-4 font-semibold">Score distribution</h2>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold">Score distribution</h2>
           <ChartContainer config={distConfig} className="h-48 w-full">
             <BarChart data={distribution} margin={{ left: -24, right: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -226,16 +247,17 @@ export default function AnalyticsPage() {
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar
                 dataKey="count"
-                fill="var(--color-count)"
+                className="fill-chart-1"
                 radius={[6, 6, 0, 0]}
                 maxBarSize={48}
+                isAnimationActive={false}
               />
             </BarChart>
           </ChartContainer>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="mb-4 font-semibold">Recent activity</h2>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold">Recent activity</h2>
           <ActivityFeed items={items} />
         </div>
       </div>

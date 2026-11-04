@@ -4,7 +4,9 @@ import { motion } from "framer-motion";
 
 function scoreTone(score: number): string {
   if (score >= 70) return "text-primary";
-  if (score >= 45) return "text-yellow-500";
+  // amber-700 keeps mid scores readable on the light card (yellow-500 is
+  // 1.91:1 there); yellow-500 stays for dark mode where it measures 9.8:1.
+  if (score >= 45) return "text-amber-700 dark:text-yellow-500";
   return "text-destructive";
 }
 
@@ -49,7 +51,7 @@ export function ScoreRing({ score, size = 72 }: { score: number; size?: number }
         />
       </svg>
       <span
-        className={`absolute font-bold ${tone} ${
+        className={`absolute font-mono font-bold tabular-nums ${tone} ${
           size >= 100 ? "text-4xl" : "text-sm"
         }`}
       >

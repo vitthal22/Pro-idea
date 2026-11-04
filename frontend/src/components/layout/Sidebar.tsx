@@ -4,7 +4,7 @@ import { Flame, History, LayoutDashboard, LogOut, Plus, User } from "lucide-reac
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import { useLogout } from "@/hooks/queries/use-auth";
 
@@ -13,6 +13,8 @@ const NAV_ITEMS = [
   { href: "/history", label: "Roasts", icon: History },
   { href: "/analytics", label: "Analytics", icon: ChartIcon },
 ];
+
+const COLLAPSED_LABEL = "group-data-[collapsed=true]/sidebar:sr-only";
 
 function ChartIcon({ className }: { className?: string }) {
   // Small inline bars — lucide's chart icon set churns between versions,
@@ -36,13 +38,21 @@ function ChartIcon({ className }: { className?: string }) {
 
 function Brand() {
   return (
-    <Link href="/dashboard" className="flex items-center gap-3 px-2 py-1">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+    <Link
+      href="/dashboard"
+      aria-label="Resume Roaster"
+      className="flex items-center gap-3 px-2 py-1 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
         <Flame className="size-5" />
       </span>
-      <span>
-        <span className="block font-semibold leading-tight">Resume Roaster</span>
-        <span className="block text-xs text-muted-foreground">Get roasted. Get better.</span>
+      <span className={COLLAPSED_LABEL}>
+        <span className="block font-heading text-[15px] leading-tight font-bold tracking-tight">
+          Resume Roaster
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          Get roasted. Get better.
+        </span>
       </span>
     </Link>
   );
@@ -52,7 +62,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <nav className="grid gap-1 px-2">
+    <nav aria-label="Main" className="grid gap-1">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
@@ -60,14 +70,16 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+            aria-current={active ? "page" : undefined}
+            title={label}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0 ${
               active
                 ? "bg-primary/12 font-medium text-primary"
                 : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             }`}
           >
-            <Icon className="size-4" />
-            {label}
+            <Icon className="size-4 shrink-0" />
+            <span className={COLLAPSED_LABEL}>{label}</span>
           </Link>
         );
       })}
@@ -76,11 +88,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /**
- * The sidebar's shared content — rendered in the desktop column and in the
+ * The sidebar's shared content — rendered in the desktop rail and in the
  * mobile Sheet. `onNavigate` closes the Sheet after a tap.
  */
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
+  const pathname = usePathname();
   const logout = useLogout();
 
   function handleLogout() {
@@ -90,41 +103,51 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 p-4">
+    <div className="flex h-full flex-col gap-3 p-3">
       <Brand />
 
       <NavLinks onNavigate={onNavigate} />
 
-      <Button asChild className="mx-2 justify-start gap-2" variant="default">
-        <Link href="/upload" onClick={onNavigate}>
-          <Plus className="size-4" />
-          New roast
+      <Button
+        asChild
+        className="justify-start gap-2 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
+        variant="default"
+      >
+        <Link href="/upload" onClick={onNavigate} title="New roast">
+          <Plus className="size-4 shrink-0" />
+          <span className={COLLAPSED_LABEL}>New roast</span>
         </Link>
       </Button>
 
-      <nav className="grid gap-1 px-2">
-        <Link
-          href="/profile"
-          onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          <User className="size-4" />
-          Profile
-        </Link>
-      </nav>
+      {/* Utilities: the collapse control, then Profile and Log out. The
+          light/dark switch deliberately lives on the Profile page instead. */}
+      <div className="mt-auto space-y-2 border-t border-sidebar-border pt-3">
+        <SidebarToggle />
 
-      <div className="mt-auto flex items-center justify-between border-t border-sidebar-border pt-4 px-2">
-        <ThemeToggle />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLogout}
-          disabled={logout.isPending}
-          className="text-muted-foreground"
-        >
-          <LogOut className="size-4" />
-          Log out
-        </Button>
+        <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsed=true]/sidebar:flex-col group-data-[collapsed=true]/sidebar:items-center group-data-[collapsed=true]/sidebar:gap-1">
+          <Link
+            href="/profile"
+            onClick={onNavigate}
+            aria-current={pathname === "/profile" ? "page" : undefined}
+            title="Profile"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsed=true]/sidebar:size-8 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0"
+          >
+            <User className="size-4 shrink-0" />
+            <span className={COLLAPSED_LABEL}>Profile</span>
+          </Link>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            disabled={logout.isPending}
+            title="Log out"
+            className="text-muted-foreground group-data-[collapsed=true]/sidebar:size-7 group-data-[collapsed=true]/sidebar:px-0"
+          >
+            <LogOut className="size-4" />
+            <span className={COLLAPSED_LABEL}>Log out</span>
+          </Button>
+        </div>
       </div>
     </div>
   );

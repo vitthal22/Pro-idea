@@ -30,24 +30,27 @@ const fadeUp: Variants = {
 
 function LatestRoastCard({ roast }: { roast: AnalysisListItem }) {
   return (
-    <div className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-transparent to-transparent p-6 sm:flex-row sm:items-center">
-      <div className="flex items-center gap-5">
+    <div className="flex h-full flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/10 via-transparent to-transparent p-4">
+      <div className="flex min-w-0 items-center gap-4">
         {roast.overall_score !== null ? (
-          <ScoreRing score={roast.overall_score} size={84} />
+          <ScoreRing score={roast.overall_score} size={64} />
         ) : (
-          <span className="size-20 rounded-full border-2 border-dashed border-border" aria-hidden />
+          <span
+            className="size-16 rounded-full border-2 border-dashed border-border"
+            aria-hidden
+          />
         )}
-        <div>
-          <p className="text-sm text-muted-foreground">Latest roast</p>
-          <p className="mt-0.5 font-semibold">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">Latest roast</p>
+          <p className="truncate text-sm font-semibold">
             {analysisModeLabel(roast.analysis_type)} analysis
           </p>
-          <span className="mt-2 inline-block">
+          <span className="mt-1.5 inline-block">
             <StatusBadge status={roast.status} />
           </span>
         </div>
       </div>
-      <Button asChild variant="outline" className="shrink-0">
+      <Button asChild variant="outline" size="sm" className="shrink-0">
         <Link href={`/analysis/${roast.id}`}>
           {isRunningStatus(roast.status)
             ? "Watch live"
@@ -65,21 +68,18 @@ function NewRoastTile() {
   return (
     <Link
       href="/upload"
-      className="group flex h-full flex-col justify-between gap-4 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6 transition-shadow hover:shadow-[0_0_32px_-8px] hover:shadow-primary/40"
+      className="group flex h-full items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-4 transition-shadow hover:shadow-[0_0_32px_-8px] hover:shadow-primary/40"
     >
-      <span className="flex size-11 items-center justify-center rounded-xl bg-primary/20 text-primary">
-        <Flame className="size-5" />
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
+        <Flame className="size-4" />
       </span>
-      <div>
-        <p className="font-semibold">Ready to get roasted?</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Four experts, one brutal score — about two minutes.
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">Ready to get roasted?</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          Four experts, one brutal score.
         </p>
-        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">
-          Start now
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-        </span>
       </div>
+      <ArrowRight className="ml-auto size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }
@@ -88,18 +88,33 @@ export default function DashboardPage() {
   const roasts = useAnalyses();
   const resumes = useResumes();
 
+  const header = (
+    <PageHeader
+      title="Overview"
+      description="Your resumes and the roasts they have endured."
+      actions={
+        <Button asChild>
+          <Link href="/upload">
+            <Upload className="size-4" />
+            New roast
+          </Link>
+        </Button>
+      }
+    />
+  );
+
   if (roasts.isPending || resumes.isPending) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-56" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-6">
+        {header}
+        <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl" />
+            <Skeleton key={i} className="h-16 rounded-xl" />
           ))}
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Skeleton className="h-40 rounded-2xl lg:col-span-2" />
-          <Skeleton className="h-40 rounded-2xl" />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Skeleton className="h-24 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-24 rounded-xl" />
         </div>
       </div>
     );
@@ -107,15 +122,18 @@ export default function DashboardPage() {
 
   if (roasts.isError) {
     return (
-      <ErrorState
-        title="Could not load your overview"
-        description={
-          roasts.error instanceof Error
-            ? roasts.error.message
-            : "An unexpected error occurred."
-        }
-        onRetry={() => roasts.refetch()}
-      />
+      <div className="space-y-6">
+        {header}
+        <ErrorState
+          title="Could not load your overview"
+          description={
+            roasts.error instanceof Error
+              ? roasts.error.message
+              : "An unexpected error occurred."
+          }
+          onRetry={() => roasts.refetch()}
+        />
+      </div>
     );
   }
 
@@ -146,54 +164,51 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Overview"
-        description="Your resumes and the roasts they have endured."
-        actions={
-          <Button asChild>
-            <Link href="/upload">
-              <Upload className="size-4" />
-              New roast
-            </Link>
-          </Button>
-        }
-      />
+    <div className="space-y-6">
+      {header}
 
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4">
-        <motion.div variants={fadeUp} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="show"
+        className="space-y-4"
+      >
+        <motion.div
+          variants={fadeUp}
+          className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4"
+        >
           <StatTile
-            icon={<Flame className="size-4 text-primary" />}
+            icon={<Flame className="size-3.5 text-primary" />}
             label="Roasts"
             value={String(roastTotal)}
           />
           <StatTile
-            icon={<Target className="size-4 text-primary" />}
+            icon={<Target className="size-3.5 text-primary" />}
             label="Average score"
             value={avg !== null ? String(avg) : "—"}
             hint={`${scores.length} scored`}
           />
           <StatTile
-            icon={<Trophy className="size-4 text-primary" />}
+            icon={<Trophy className="size-3.5 text-primary" />}
             label="Best score"
             value={best !== null ? String(best) : "—"}
           />
           <StatTile
-            icon={<Upload className="size-4 text-primary" />}
+            icon={<Upload className="size-3.5 text-primary" />}
             label="Resumes"
             value={String(resumeTotal)}
           />
         </motion.div>
 
-        <motion.div variants={fadeUp} className="grid gap-4 lg:grid-cols-3">
+        <motion.div variants={fadeUp} className="grid gap-3 lg:grid-cols-3">
           {latest ? (
             <div className="lg:col-span-2">
               <LatestRoastCard roast={latest} />
             </div>
           ) : (
             <div className="lg:col-span-2">
-              <div className="flex h-full items-center gap-4 rounded-2xl border border-dashed border-border p-6 text-muted-foreground">
-                <History className="size-8 shrink-0" />
+              <div className="flex h-full items-center gap-3 rounded-xl border border-dashed border-border p-4 text-muted-foreground">
+                <History className="size-5 shrink-0" />
                 <p className="text-sm">
                   No roasts yet — your resume is uploaded and waiting. Start
                   one from the sidebar or the tile on the right.
@@ -206,17 +221,17 @@ export default function DashboardPage() {
 
         {roastTotal > 0 && (
           <motion.div variants={fadeUp}>
-            <h2 className="mb-3 flex items-center gap-2 font-semibold">
+            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="size-4 text-primary" aria-hidden />
               Recent roasts
               <Link
                 href="/history"
-                className="ml-auto text-sm font-normal text-muted-foreground hover:text-foreground"
+                className="ml-auto text-xs font-normal text-muted-foreground hover:text-foreground"
               >
                 View all
               </Link>
             </h2>
-            <div className="grid gap-3">
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
               {roastItems.slice(0, 4).map((roast) => (
                 <AnalysisCard key={roast.id} analysis={roast} />
               ))}
@@ -226,8 +241,8 @@ export default function DashboardPage() {
 
         {resumeTotal > 0 && (
           <motion.div variants={fadeUp}>
-            <h2 className="mb-3 font-semibold">Your resumes</h2>
-            <div className="grid gap-3">
+            <h2 className="mb-2 text-sm font-semibold">Your resumes</h2>
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
               {resumeItems.map((resume) => (
                 <ResumeRow key={resume.id} resume={resume} />
               ))}
