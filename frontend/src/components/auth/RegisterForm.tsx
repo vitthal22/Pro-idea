@@ -126,7 +126,7 @@ export function RegisterForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-5" noValidate>
+        <form onSubmit={onSubmit} className="grid gap-6" noValidate>
           {fields.map((field) => (
             <div key={field.name} className="grid gap-2">
               <Label htmlFor={field.name}>{field.label}</Label>

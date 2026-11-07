@@ -58,7 +58,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           sidebarCollapsed ? "w-[4.5rem]" : "w-64"
         } ${
           ready
-            ? "transition-[width] duration-150 ease-out motion-reduce:transition-none"
+            ? "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             : ""
         }`}
       >
@@ -89,7 +89,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 outline-none md:px-8 md:py-5"
+          className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 outline-none md:px-8 md:py-6"
         >
           {/* Without a token the page must not mount: otherwise its queries
               fire unauthenticated while the redirect is in flight (two 401s

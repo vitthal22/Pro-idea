@@ -416,8 +416,8 @@ function HeroCard({
   ];
 
   return (
-    <Card className="mt-5 border-primary/25 bg-gradient-to-b from-primary/[0.05] to-transparent p-5">
-      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <Card className="mt-5 border-primary/25 bg-primary/[0.03] p-6">
+      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="flex flex-col items-center">
           <ScoreDial
             metrics={metrics}
@@ -485,7 +485,7 @@ function HeroCard({
             <div className="mt-4 border-t border-border pt-3">
               <p className={EYEBROW}>Five-second impression</p>
               <blockquote className="mt-2 border-l-2 border-primary/60 pl-3">
-                <p className="text-[15px] leading-7 italic">
+                <p className="text-[15px] leading-7">
                   {check.five_second_impression}
                 </p>
               </blockquote>
