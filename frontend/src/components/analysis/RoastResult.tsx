@@ -1,8 +1,8 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Eye, Flame } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Flame } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { analysisModeLabel } from "@/lib/analysis-modes";
@@ -32,13 +32,19 @@ function pad(value: number): string {
 /** Score tone, aligned with the backend verdict bands (80 / 65 / 45). */
 function tone(score: number) {
   if (score >= 80) {
-    return { text: "text-pass", bar: "bg-pass", chip: "border-pass/40 text-pass" };
+    return {
+      text: "text-pass",
+      bar: "bg-pass",
+      chip: "border-pass/40 text-pass",
+      stroke: "stroke-pass",
+    };
   }
   if (score >= 65) {
     return {
       text: "text-primary",
       bar: "bg-primary",
       chip: "border-primary/40 text-primary",
+      stroke: "stroke-primary",
     };
   }
   if (score >= 45) {
@@ -47,12 +53,14 @@ function tone(score: number) {
       bar: "bg-amber-700 dark:bg-yellow-500",
       chip:
         "border-amber-700/40 text-amber-700 dark:border-yellow-500/40 dark:text-yellow-500",
+      stroke: "stroke-amber-700 dark:stroke-yellow-500",
     };
   }
   return {
     text: "text-destructive",
     bar: "bg-destructive",
     chip: "border-destructive/40 text-destructive",
+    stroke: "stroke-destructive",
   };
 }
 
@@ -149,42 +157,147 @@ function evaluatorLabel(name: string): string {
 }
 
 /** 0–100 track with the four real verdict zones and a marker at the score. */
-function ScoreStrip({ score }: { score: number }) {
-  const zones = [
-    { from: 0, to: 45, className: "bg-destructive/70" },
-    { from: 45, to: 65, className: "bg-amber-600/70" },
-    { from: 65, to: 80, className: "bg-primary" },
-    { from: 80, to: 100, className: "bg-pass/70" },
-  ];
-  const position = Math.min(100, Math.max(0, score));
+type DialMetric = {
+  label: string;
+  value: number | null;
+  weight: number | null;
+  meaning: string;
+};
+
+/**
+ * Four equal quadrants, each its own 0-100 gauge. Quadrants are never sized by
+ * weight, so the ring can't be misread as "these add up to the score".
+ */
+function ScoreDial({
+  metrics,
+  score,
+  active,
+  onActive,
+}: {
+  metrics: DialMetric[];
+  score: number;
+  active: number | null;
+  onActive: (index: number | null) => void;
+}) {
+  const size = 240;
+  const stroke = 14;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const gap = 8;
+  const arc = (circumference * (90 - gap)) / 360;
+  const center = size / 2;
+
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+
+  const label = metrics
+    .map((metric) => `${metric.label} ${metric.value ?? "no data"}`)
+    .join(", ");
+
+  const arcMidpoint = (index: number) => {
+    const degrees = -90 + index * 90 + gap / 2 + (90 - gap) / 2;
+    const radians = (degrees * Math.PI) / 180;
+    return {
+      x: center + Math.cos(radians) * radius,
+      y: center + Math.sin(radians) * radius,
+    };
+  };
+
+  const activeMetric = active === null ? null : metrics[active];
+  const position = tip ?? (active === null ? null : arcMidpoint(active));
 
   return (
-    <div className="relative mt-4">
-      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        {zones.map((zone) => (
-          <div
-            key={zone.to}
-            className={`absolute inset-y-0 ${zone.className}`}
-            style={{ left: `${zone.from}%`, width: `${zone.to - zone.from}%` }}
-          />
-        ))}
-      </div>
-      <div
-        className="absolute -top-1 h-3.5 w-0.5 bg-foreground"
-        style={{ left: `calc(${position}% - 1px)` }}
-        title={`Score ${score} of 100`}
-      />
-      <div className="relative mt-1 h-3 text-[10px] text-muted-foreground">
-        {[45, 65, 80].map((tick) => (
-          <span
-            key={tick}
-            className="absolute -translate-x-1/2 font-mono"
-            style={{ left: `${tick}%` }}
-          >
-            {tick}
+    <div className="relative size-[240px] shrink-0">
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="size-full"
+        role="img"
+        aria-label={`Overall ${score} of 100. ${label}.`}
+        onMouseLeave={() => {
+          onActive(null);
+          setTip(null);
+        }}
+      >
+        {metrics.map((metric, index) => {
+          const startAngle = -90 + index * 90 + gap / 2;
+          const metricTone = metric.value === null ? null : tone(metric.value);
+          const isActive = active === index;
+          const dimmed = active !== null && !isActive;
+
+          return (
+            <g key={metric.label} transform={`rotate(${startAngle} ${center} ${center})`}>
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                strokeWidth={stroke}
+                strokeLinecap="butt"
+                className="stroke-muted/50"
+                strokeDasharray={`${arc} ${circumference}`}
+              />
+              {metric.value !== null && metricTone && (
+                <circle
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  fill="none"
+                  strokeLinecap="butt"
+                  className={`${metricTone.stroke} ${metricTone.text} cursor-default transition-[stroke-width,opacity] duration-150`}
+                  style={{
+                    filter: isActive ? "drop-shadow(0 0 6px currentColor)" : undefined,
+                    opacity: dimmed ? 0.3 : 1,
+                  }}
+                  strokeWidth={isActive ? 20 : stroke}
+                  strokeDasharray={`${
+                    (arc * Math.min(100, Math.max(0, metric.value))) / 100
+                  } ${circumference}`}
+                  onMouseEnter={() => onActive(index)}
+                  onMouseMove={(event) => {
+                    const box = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+                    if (!box) return;
+                    setTip({
+                      x: event.clientX - box.left,
+                      y: event.clientY - box.top,
+                    });
+                  }}
+                />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="flex items-baseline gap-1">
+          <span className="font-mono text-[60px] leading-none font-bold tabular-nums">
+            {score}
           </span>
-        ))}
+          <span className="text-xs text-muted-foreground">/ 100</span>
+        </div>
       </div>
+
+      {active !== null && activeMetric && position && (
+        <div
+          className="pointer-events-none absolute z-20 w-[200px] -translate-x-1/2 -translate-y-[120%] rounded-lg border border-border bg-popover p-2.5 shadow-lg"
+          style={{ left: position.x, top: position.y }}
+          role="status"
+        >
+          <p className="flex items-baseline justify-between gap-2">
+            <span className="text-xs font-semibold">{activeMetric.label}</span>
+            <span className="font-mono text-[11px] tabular-nums">
+              {activeMetric.value ?? "—"}/100
+            </span>
+          </p>
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {activeMetric.meaning}
+          </p>
+          {activeMetric.weight !== null && (
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+              weight {Math.round(activeMetric.weight * 100)}%
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -242,14 +355,14 @@ function SeverityStrip({ result }: { result: AnalysisResultPayload }) {
 function HeroCard({
   result,
   verdict,
-  large = false,
 }: {
   result: AnalysisResultPayload;
   verdict: ScoreVerdict | null;
-  large?: boolean;
 }) {
+  const [active, setActive] = useState<number | null>(null);
   const score = Math.round(result.overall_score ?? 0);
   const band = tone(score);
+  const check = result.reality_check;
 
   const category = (name: string) =>
     result.breakdown?.ai_categories.find((entry) => entry.category === name);
@@ -257,116 +370,132 @@ function HeroCard({
   const impact = category("content_quality");
   const jobMatch = category("role_relevance");
   const completeness = result.breakdown?.deterministic_checks.find(
-    (check) => check.name === "section_completeness",
+    (entry) => entry.name === "section_completeness",
   );
   const completenessScore = completeness
     ? Math.round((completeness.score / completeness.max) * 100)
     : null;
   const hasJobMatch = result.job_match_feedback !== null && jobMatch !== undefined;
 
-  const metrics = [
-    { label: "ATS", value: ats ? Math.round(ats.score) : null, weight: ats?.weight ?? null },
+  const metrics: DialMetric[] = [
+    {
+      label: "ATS",
+      value: ats ? Math.round(ats.score) : null,
+      weight: ats?.weight ?? null,
+      meaning: "What parsing software sees: sections, structure and keyword coverage.",
+    },
     {
       label: "Job match",
       value: hasJobMatch && jobMatch ? Math.round(jobMatch.score) : null,
       weight: hasJobMatch ? (jobMatch?.weight ?? null) : null,
-      hint: "Role or JD roast",
+      meaning: "Fit against the target role or the job posting you pasted.",
     },
     {
       label: "Impact",
       value: impact ? Math.round(impact.score) : null,
       weight: impact?.weight ?? null,
+      meaning: "Quantified results and specific, evidence-backed writing.",
     },
-    { label: "Completeness", value: completenessScore, weight: null },
+    {
+      label: "Completeness",
+      value: completenessScore,
+      weight: null,
+      meaning: "Contact, experience, education and skills are all present.",
+    },
   ];
 
   return (
     <Card className="mt-5 border-primary/25 bg-gradient-to-b from-primary/[0.05] to-transparent p-5">
-      <div className="flex flex-wrap items-center gap-4">
-        <span
-          className={`font-mono leading-[0.85] font-bold tabular-nums ${band.text} ${
-            large ? "text-[96px]" : "text-[72px]"
-          }`}
-        >
-          {score}
-        </span>
-        <div className="pb-1.5">
-          <span className={`${CHIP} ${band.chip}`}>{verdict?.label ?? "Score"}</span>
-          <p className="mt-1 text-xs text-muted-foreground">out of 100</p>
+      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="flex flex-col items-center">
+          <ScoreDial
+            metrics={metrics}
+            score={score}
+            active={active}
+            onActive={setActive}
+          />
+          <span className={`${CHIP} ${band.chip} mt-3`}>
+            {verdict?.label ?? "Score"}
+          </span>
         </div>
-      </div>
-      {verdict && (
-        <p className="mt-3 max-w-[72ch] text-sm leading-6 text-muted-foreground">
-          {verdict.line}
-        </p>
-      )}
 
-      <ScoreStrip score={score} />
+        <div className="flex flex-col">
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
+            {metrics.map((metric, index) => {
+              const metricTone = metric.value === null ? null : tone(metric.value);
+              return (
+                <div
+                  key={metric.label}
+                  tabIndex={0}
+                  onMouseEnter={() => setActive(index)}
+                  onMouseLeave={() => setActive(null)}
+                  onFocus={() => setActive(index)}
+                  onBlur={() => setActive(null)}
+                  className={`-mx-1 rounded-md px-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    active === index ? "bg-muted/40" : ""
+                  }`}
+                >
+                  <dt className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{metric.label}</span>
+                    {metric.weight !== null && (
+                      <span className="font-mono text-[10px]">
+                        {Math.round(metric.weight * 100)}%
+                      </span>
+                    )}
+                  </dt>
+                  <dd
+                    className={`mt-0.5 font-mono text-[22px] leading-none font-semibold tabular-nums ${
+                      metricTone ? metricTone.text : "text-muted-foreground"
+                    }`}
+                  >
+                    {metric.value ?? "—"}
+                  </dd>
+                  <div className="mt-1.5 h-0.5 w-full bg-muted">
+                    {metric.value !== null && metricTone && (
+                      <div
+                        className={`h-0.5 ${metricTone.bar}`}
+                        style={{
+                          width: `${Math.min(100, Math.max(0, metric.value))}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+                  {metric.value === null && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      No target role
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </dl>
 
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-4">
-        {metrics.map((metric) => {
-          const metricTone = metric.value === null ? null : tone(metric.value);
-          return (
-            <div key={metric.label}>
-              <dt className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-                <span>{metric.label}</span>
-                {metric.weight !== null && (
-                  <span className="font-mono text-[10px]">
-                    {Math.round(metric.weight * 100)}%
-                  </span>
-                )}
-              </dt>
-              <dd
-                className={`mt-1 font-mono text-2xl leading-none font-semibold tabular-nums ${
-                  metricTone ? metricTone.text : "text-muted-foreground"
-                }`}
-              >
-                {metric.value ?? "—"}
-              </dd>
-              <div className="mt-1.5 h-0.5 w-full bg-muted">
-                {metric.value !== null && metricTone && (
-                  <div
-                    className={`h-0.5 ${metricTone.bar}`}
-                    style={{ width: `${Math.min(100, Math.max(0, metric.value))}%` }}
-                  />
-                )}
-              </div>
-              {metric.value === null && metric.hint && (
-                <p className="mt-1 text-[10px] text-muted-foreground">{metric.hint}</p>
-              )}
+          {check?.five_second_impression && (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className={EYEBROW}>Five-second impression</p>
+              <blockquote className="mt-2 border-l-2 border-primary/60 pl-3">
+                <p className="text-[15px] leading-7 italic">
+                  {check.five_second_impression}
+                </p>
+              </blockquote>
             </div>
-          );
-        })}
-      </dl>
+          )}
 
-      <div className="mt-5 border-t border-border pt-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className={EYEBROW}>How the score was built</p>
-          <p className="font-mono text-[10px] text-muted-foreground">50 / 50</p>
+          {verdict && (
+            <p className="mt-3 max-w-[72ch] text-sm leading-6 text-muted-foreground">
+              {verdict.line}
+            </p>
+          )}
+
+          <div className="mt-4 border-t border-border pt-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className={EYEBROW}>How the score was built</p>
+              <p className="font-mono text-[10px] text-muted-foreground">50 / 50</p>
+            </div>
+            <CompositionBar result={result} />
+          </div>
         </div>
-        <CompositionBar result={result} />
       </div>
-    </Card>
-  );
-}
-
-function FirstImpressionCard({
-  check,
-}: {
-  check: NonNullable<AnalysisResultPayload["reality_check"]>;
-}) {
-  return (
-    <Card>
-      <p className={`${EYEBROW} flex items-center gap-2 text-primary`}>
-        <Eye className="size-3.5" aria-hidden />
-        Five-second impression
-      </p>
-      <blockquote className="mt-2 border-l-2 border-primary/60 pl-4">
-        <p className="text-[15px] leading-7 italic">{check.five_second_impression}</p>
-      </blockquote>
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        What a recruiter takes away before reading a single bullet.
-      </p>
     </Card>
   );
 }
@@ -604,20 +733,9 @@ export function RoastVerdict({
         <h1 className="mt-2 text-[28px] leading-[1.15] font-bold tracking-tight sm:text-[34px]">
           {check?.headline_verdict ?? "Roast report"}
         </h1>
-        {check && (
-          <p className="mt-2 max-w-[80ch] text-[15px] leading-7 text-muted-foreground">
-            {check.verdict_summary}
-          </p>
-        )}
       </header>
 
-      <HeroCard result={result} verdict={verdict} large />
-
-      {check?.five_second_impression && (
-        <div className="mt-3">
-          <FirstImpressionCard check={check} />
-        </div>
-      )}
+      <HeroCard result={result} verdict={verdict} />
 
       {roastText && (
         <div className="mt-3">
@@ -779,6 +897,11 @@ export function RoastReport({
           Full report · {analysisModeLabel(analysisType)} · benchmark: senior
           engineering cohort, 2026 market
         </p>
+        {check?.verdict_summary && (
+          <p className="mt-3 max-w-[80ch] text-[15px] leading-7 text-muted-foreground">
+            {check.verdict_summary}
+          </p>
+        )}
       </header>
 
       {sections.map((section, index) => (
