@@ -223,11 +223,13 @@ function ScoreDial({
                 strokeWidth={stroke}
                 strokeLinecap="butt"
                 className={`transition-[stroke] duration-150 ${
-                  isActive ? "stroke-foreground/25" : "stroke-muted/50"
+                  isActive ? "stroke-black" : "stroke-muted/50"
                 }`}
                 strokeDasharray={`${arc} ${circumference}`}
                 style={{
-                  filter: isActive ? "drop-shadow(0 0 6px currentColor)" : undefined,
+                  filter: isActive
+                    ? "drop-shadow(0 0 8px rgba(0, 0, 0, 0.9))"
+                    : undefined,
                 }}
               />
               {metric.value !== null && metricTone && (
