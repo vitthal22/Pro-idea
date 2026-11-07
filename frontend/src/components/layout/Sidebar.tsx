@@ -47,7 +47,7 @@ function Brand() {
         <Flame className="size-5" />
       </span>
       <span className={COLLAPSED_LABEL}>
-        <span className="block font-heading text-[15px] leading-tight font-bold tracking-tight">
+        <span className="block font-heading text-sm leading-tight font-semibold">
           Resume Roaster
         </span>
         <span className="block text-xs text-muted-foreground">

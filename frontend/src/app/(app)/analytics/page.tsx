@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="mb-3 text-sm font-semibold">Score trend</h2>
         {trend.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -257,7 +257,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="mb-3 text-sm font-semibold">Score distribution</h2>
           <ChartContainer config={distConfig} className="h-48 w-full">
             <BarChart data={distribution} margin={{ left: -24, right: 8 }}>
@@ -276,7 +276,7 @@ export default function AnalyticsPage() {
           </ChartContainer>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="mb-3 text-sm font-semibold">Recent activity</h2>
           <ActivityFeed items={items} />
         </div>

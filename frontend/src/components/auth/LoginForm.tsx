@@ -72,7 +72,7 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-5" noValidate>
+        <form onSubmit={onSubmit} className="grid gap-6" noValidate>
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
             <Input

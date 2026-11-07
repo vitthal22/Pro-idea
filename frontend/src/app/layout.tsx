@@ -22,10 +22,27 @@ const mono = Spline_Sans_Mono({
   subsets: ["latin"],
 });
 
+const SITE_TITLE = "Resume Roaster — brutally honest AI resume feedback";
+const SITE_DESCRIPTION =
+  "Upload a resume and four specialised AI evaluators score it, rank every weakness, and rewrite the lines that get you screened out.";
+
 export const metadata: Metadata = {
-  title: "Resume Roaster — brutally honest AI resume feedback",
-  description:
-    "AI-powered resume analysis with a multi-evaluator pipeline that delivers brutally honest, constructive feedback.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: "Resume Roaster",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
