@@ -25,7 +25,7 @@ export function StatusBadge({ status }: { status: AnalysisStatus }) {
         className="gap-1.5 border-primary/40 bg-primary/10 text-primary"
       >
         <span
-          className="size-1.5 animate-pulse rounded-full bg-primary"
+          className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
           aria-hidden
         />
         {STATUS_LABELS[status]}

@@ -56,6 +56,7 @@ from app.models.analysis_usage import AnalysisUsageModel
 from app.models.resume import ResumeModel
 from app.models.user import TIER_DEMO
 from app.schemas.evaluators import JobMatchEvaluatorOutput
+from app.schemas.report import RoastReport
 from app.services.user_repository import get_user_repository
 
 logger = logging.getLogger("app.services.analysis")
@@ -72,6 +73,13 @@ PROMPT_VERSIONS: dict[str, str] = {
     "composer": COMPOSER_VERSION,
     "fix_planner": FIX_PLANNER_VERSION,
 }
+
+
+def _roast_text(report: RoastReport) -> str:
+    """The roast as the UI shows it: the three hits, else legacy prose."""
+    if report.roast_lines:
+        return "\n".join(report.roast_lines)
+    return report.roast
 
 
 def _tier_daily_limit(tier: str) -> int:
@@ -416,7 +424,7 @@ def _result_row(
             "ai_score": scoring.ai_score,
         },
         scoring_methodology=scoring.methodology,
-        final_roast=report.roast,
+        final_roast=_roast_text(report),
         final_report={
             "evaluator_summaries": aggregated.evaluator_summaries,
             "failed_evaluators": aggregated.failed_evaluators,

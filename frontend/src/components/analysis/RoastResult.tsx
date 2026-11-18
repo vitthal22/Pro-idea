@@ -143,6 +143,20 @@ function RoastProse({ text, className }: { text: string; className?: string }) {
   );
 }
 
+/** The roast as a verdict: one line per hit, no paragraphs to wade through. */
+function RoastLines({ lines }: { lines: string[] }) {
+  return (
+    <ul className="space-y-2.5">
+      {lines.map((line, index) => (
+        <li key={index} className="flex gap-3">
+          <span aria-hidden className="mt-3 h-px w-3 shrink-0 bg-primary" />
+          <span className="text-[17px] leading-7 font-medium">{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const EVALUATOR_LABELS: Record<string, string> = {
   ats: "ATS",
   recruiter: "Recruiter",
@@ -187,41 +201,31 @@ function ScoreDial({
   const arc = (circumference * (90 - gap)) / 360;
   const center = size / 2;
 
-  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
-
   const label = metrics
     .map((metric) => `${metric.label} ${metric.value ?? "no data"}`)
     .join(", ");
 
-  const arcMidpoint = (index: number) => {
-    const degrees = -90 + index * 90 + gap / 2 + (90 - gap) / 2;
-    const radians = (degrees * Math.PI) / 180;
-    return {
-      x: center + Math.cos(radians) * radius,
-      y: center + Math.sin(radians) * radius,
-    };
-  };
-
   const activeMetric = active === null ? null : metrics[active];
-  const position = tip ?? (active === null ? null : arcMidpoint(active));
 
   return (
     <div className="relative size-[240px] shrink-0">
       <svg
         viewBox={`0 0 ${size} ${size}`}
         className="size-full"
+        style={{ overflow: "visible" }}
         role="img"
         aria-label={`Overall ${score} of 100. ${label}.`}
-        onMouseLeave={() => {
-          onActive(null);
-          setTip(null);
-        }}
+        onMouseLeave={() => onActive(null)}
       >
         {metrics.map((metric, index) => {
           const startAngle = -90 + index * 90 + gap / 2;
           const metricTone = metric.value === null ? null : tone(metric.value);
           const isActive = active === index;
           const dimmed = active !== null && !isActive;
+          const filled =
+            metric.value === null
+              ? 0
+              : (arc * Math.min(100, Math.max(0, metric.value))) / 100;
 
           return (
             <g key={metric.label} transform={`rotate(${startAngle} ${center} ${center})`}>
@@ -232,8 +236,15 @@ function ScoreDial({
                 fill="none"
                 strokeWidth={stroke}
                 strokeLinecap="butt"
-                className="stroke-muted/50"
+                className={`transition-[stroke] duration-300 ${
+                  isActive ? "stroke-black" : "stroke-muted/50"
+                }`}
                 strokeDasharray={`${arc} ${circumference}`}
+                style={{
+                  filter: isActive
+                    ? "drop-shadow(0 0 8px rgba(0, 0, 0, 0.9))"
+                    : undefined,
+                }}
               />
               {metric.value !== null && metricTone && (
                 <circle
@@ -242,62 +253,76 @@ function ScoreDial({
                   r={radius}
                   fill="none"
                   strokeLinecap="butt"
-                  className={`${metricTone.stroke} ${metricTone.text} cursor-default transition-[stroke-width,opacity] duration-150`}
+                  className={`pointer-events-none transition-opacity duration-300 ${metricTone.text}`}
+                  stroke="currentColor"
                   style={{
-                    filter: isActive ? "drop-shadow(0 0 6px currentColor)" : undefined,
-                    opacity: dimmed ? 0.3 : 1,
+                    opacity: dimmed ? 0.22 : 1,
+                    filter:
+                      isActive && filled > 0
+                        ? "drop-shadow(0 0 7px currentColor)"
+                        : undefined,
                   }}
-                  strokeWidth={isActive ? 20 : stroke}
-                  strokeDasharray={`${
-                    (arc * Math.min(100, Math.max(0, metric.value))) / 100
-                  } ${circumference}`}
-                  onMouseEnter={() => onActive(index)}
-                  onMouseMove={(event) => {
-                    const box = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                    if (!box) return;
-                    setTip({
-                      x: event.clientX - box.left,
-                      y: event.clientY - box.top,
-                    });
-                  }}
+                  strokeWidth={stroke}
+                  strokeDasharray={`${filled} ${circumference}`}
                 />
               )}
+              {/* Invisible hit band over the full section, so hovering the
+                  empty remainder highlights the same quadrant. */}
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={stroke + 14}
+                strokeDasharray={`${arc} ${circumference}`}
+                className="cursor-default"
+                style={{ pointerEvents: "stroke" }}
+                onMouseEnter={() => onActive(index)}
+              />
             </g>
           );
         })}
       </svg>
 
+      {/* The hole doubles as the detail panel: hovering a section swaps the
+          score for that section's read-out, so nothing floats over the page. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="flex items-baseline gap-1">
-          <span className="font-mono text-[60px] leading-none font-bold tabular-nums">
-            {score}
-          </span>
-          <span className="text-xs text-muted-foreground">/ 100</span>
-        </div>
-      </div>
-
-      {active !== null && activeMetric && position && (
-        <div
-          className="pointer-events-none absolute z-20 w-[200px] -translate-x-1/2 -translate-y-[120%] rounded-lg border border-border bg-popover p-2.5 shadow-lg"
-          style={{ left: position.x, top: position.y }}
-          role="status"
-        >
-          <p className="flex items-baseline justify-between gap-2">
-            <span className="text-xs font-semibold">{activeMetric.label}</span>
-            <span className="font-mono text-[11px] tabular-nums">
-              {activeMetric.value ?? "—"}/100
-            </span>
-          </p>
-          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-            {activeMetric.meaning}
-          </p>
-          {activeMetric.weight !== null && (
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-              weight {Math.round(activeMetric.weight * 100)}%
+        {active !== null && activeMetric ? (
+          <div className="w-[172px] text-center" role="status">
+            <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-muted-foreground">
+              {activeMetric.label}
             </p>
-          )}
-        </div>
-      )}
+            <p
+              className={`mt-1 font-mono text-[26px] leading-none font-semibold tabular-nums ${
+                activeMetric.value !== null
+                  ? tone(activeMetric.value).text
+                  : "text-muted-foreground"
+              }`}
+            >
+              {activeMetric.value ?? "—"}
+              <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">
+                /100
+              </span>
+            </p>
+            <p className="mt-2 text-[10px] leading-[1.4] text-muted-foreground">
+              {activeMetric.meaning}
+            </p>
+            {activeMetric.weight !== null && (
+              <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                weight {Math.round(activeMetric.weight * 100)}%
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-1">
+            <span className="font-mono text-[60px] leading-none font-bold tabular-nums">
+              {score}
+            </span>
+            <span className="text-xs text-muted-foreground">/ 100</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -405,8 +430,8 @@ function HeroCard({
   ];
 
   return (
-    <Card className="mt-5 border-primary/25 bg-gradient-to-b from-primary/[0.05] to-transparent p-5">
-      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <Card className="mt-6 border-primary/25 bg-primary/[0.03] p-6">
+      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="flex flex-col items-center">
           <ScoreDial
             metrics={metrics}
@@ -450,7 +475,7 @@ function HeroCard({
                   >
                     {metric.value ?? "—"}
                   </dd>
-                  <div className="mt-1.5 h-0.5 w-full bg-muted">
+                  <div className="mt-2 h-0.5 w-full bg-muted">
                     {metric.value !== null && metricTone && (
                       <div
                         className={`h-0.5 ${metricTone.bar}`}
@@ -474,7 +499,7 @@ function HeroCard({
             <div className="mt-4 border-t border-border pt-3">
               <p className={EYEBROW}>Five-second impression</p>
               <blockquote className="mt-2 border-l-2 border-primary/60 pl-3">
-                <p className="text-[15px] leading-7 italic">
+                <p className="text-[15px] leading-7">
                   {check.five_second_impression}
                 </p>
               </blockquote>
@@ -545,7 +570,7 @@ function MarketCard({ market }: { market: MarketVerdict }) {
           {market.missing_signals.map((signal) => (
             <li
               key={signal}
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+              className="rounded border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground"
             >
               {signal}
             </li>
@@ -640,7 +665,7 @@ function WorksCard({ notes }: { notes: string[] }) {
   return (
     <Card className="p-4">
       <h3 className="text-sm font-semibold">What works</h3>
-      <ul className="mt-2 space-y-1.5">
+      <ul className="mt-2 space-y-2">
         {notes.map((note, index) => (
           <li key={index} className="flex gap-2 text-sm leading-6">
             <Check className="mt-1 size-4 shrink-0 text-pass" />
@@ -661,7 +686,7 @@ function ChecksCard({ result }: { result: AnalysisResultPayload }) {
       <h3 className="text-sm font-semibold">Checks</h3>
       <dl className="mt-2 divide-y divide-border">
         {checks.map((check) => (
-          <div key={check.name} className="flex items-start justify-between gap-3 py-1.5">
+          <div key={check.name} className="flex items-start justify-between gap-3 py-2">
             <dt className="text-xs text-muted-foreground">
               <span className="capitalize">{check.name.replace(/_/g, " ")}</span>
             </dt>
@@ -712,6 +737,9 @@ export function RoastVerdict({
 }) {
   const check = result.reality_check;
   const roastText = check?.roast ?? result.final_roast;
+  const roastLines = (check?.roast_lines ?? []).filter(
+    (line) => line.trim().length > 0,
+  );
 
   return (
     <article>
@@ -721,7 +749,7 @@ export function RoastVerdict({
             Roast · {analysisModeLabel(analysisType)}
           </p>
           <div className="flex shrink-0 items-center gap-2">
-            <Button asChild size="sm" className="gap-1.5">
+            <Button asChild size="sm" className="gap-2">
               <Link href={`/analysis/${analysisId}/report`}>
                 View full report
                 <ArrowRight className="size-3.5" />
@@ -737,7 +765,7 @@ export function RoastVerdict({
 
       <HeroCard result={result} verdict={verdict} />
 
-      {roastText && (
+      {(roastLines.length > 0 || roastText) && (
         <div className="mt-3">
           <Card>
             <p className={`${EYEBROW} flex items-center gap-2 text-primary`}>
@@ -745,7 +773,11 @@ export function RoastVerdict({
               The roast
             </p>
             <div className="mt-3">
-              <RoastProse text={roastText} />
+              {roastLines.length > 0 ? (
+                <RoastLines lines={roastLines} />
+              ) : (
+                roastText && <RoastProse text={roastText} />
+              )}
             </div>
           </Card>
         </div>
@@ -870,7 +902,7 @@ export function RoastReport({
         <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
           <Link
             href={`/analysis/${analysisId}`}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" aria-hidden />
             Back to verdict
@@ -894,8 +926,7 @@ export function RoastReport({
           {check?.headline_verdict ?? "Roast report"}
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Full report · {analysisModeLabel(analysisType)} · benchmark: senior
-          engineering cohort, 2026 market
+          Full report · {analysisModeLabel(analysisType)}
         </p>
         {check?.verdict_summary && (
           <p className="mt-3 max-w-[80ch] text-[15px] leading-7 text-muted-foreground">

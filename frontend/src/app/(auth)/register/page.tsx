@@ -9,7 +9,11 @@ export const metadata = {
 
 export default function RegisterPage() {
   return (
-    <div className="relative flex min-h-screen flex-col items-center px-4 pt-16 pb-12">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="relative flex min-h-screen flex-col items-center px-4 pt-16 pb-12 outline-none"
+    >
       <div
         className="bg-glow-ember pointer-events-none absolute inset-x-0 -top-24 mx-auto h-96 max-w-3xl"
         aria-hidden
@@ -26,6 +30,6 @@ export default function RegisterPage() {
       <div className="relative mx-auto w-full max-w-sm">
         <RegisterForm />
       </div>
-    </div>
+    </main>
   );
 }

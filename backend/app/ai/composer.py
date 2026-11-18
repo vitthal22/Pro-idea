@@ -1,17 +1,22 @@
-"""Roast composer — synthesizes the structured reality check (v2).
+"""Roast composer — synthesizes the three-hit verdict (v3).
 
 The composer is the only free-form prose in the pipeline, but since v2 it
-returns a **structured** ``RoastReport`` (headline verdict, five-second
-impression, poison points, three-market analysis, and the narrative
-roast) validated via ``call_ai(response_model=...)``. If the AI call fails
-after retries, a deterministic ``RoastReport`` built from the aggregated
-findings is returned instead — every field is always populated.
+returns a **structured** ``RoastReport`` (headline verdict, three roast
+lines, poison points, three-market analysis) validated via
+``call_ai(response_model=...)``.
+
+Since v3 the roast is three one-line hits instead of a 200-350 word essay,
+and ``_normalize`` enforces that shape deterministically: the verdict screen
+can never be handed a wall of text, whichever model answered. If the AI call
+fails after retries, a deterministic ``RoastReport`` built from the
+aggregated findings is returned instead — every field is always populated.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 
 from app.ai.prompts.composer import SYSTEM_PROMPT
 from app.ai.provider import AIResult, call_ai
@@ -27,6 +32,28 @@ logger = logging.getLogger("app.ai.composer")
 
 _MAX_ITEMS_PER_LIST = 8
 _MAX_ITEM_CHARS = 160
+
+# The shape the UI renders. These are targets, not schema limits: the schema
+# stays looser on purpose, because a validation failure spends a retry and
+# then the deterministic fallback. Shape is enforced here instead.
+_ROAST_LINE_COUNT = 3
+_ROAST_LINE_CHARS = 110
+_POISON_POINT_COUNT = 3
+_POISON_POINT_CHARS = 160
+_MARKET_ANALYSIS_CHARS = 190
+_MISSING_SIGNAL_COUNT = 2
+_MISSING_SIGNAL_CHARS = 80
+_SUMMARY_CHARS = 260
+_IMPRESSION_CHARS = 170
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_LIST_MARKER = re.compile(r"^(?:[-*•–—]+\s*|\d+[.)]\s*)")
+_WRAPPING_QUOTES = "\"'“”‘’"
+# Two findings making the same point share most of their content words.
+_DUPLICATE_OVERLAP = 0.55
+_STOPWORDS = frozenset(
+    "a an and are as at be but by for from has have in into is it its of on or "
+    "that the their this to was were with your you without not no".split()
+)
 
 
 def _compact(
@@ -53,6 +80,139 @@ def _compact(
     }
 
 
+def _collapse(text: str) -> str:
+    """One line, single spaces, no stray whitespace."""
+    return " ".join(text.split())
+
+
+def _tokens(text: str) -> set[str]:
+    """Content words, for spotting two findings that say the same thing."""
+    cleaned = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
+    return {
+        word for word in cleaned.split() if len(word) > 2 and word not in _STOPWORDS
+    }
+
+
+def _is_repeat(tokens: set[str], seen: list[set[str]]) -> bool:
+    """True when a finding restates one already kept (Jaccard overlap)."""
+    if not tokens:
+        return True
+    return any(
+        len(tokens & previous) / len(tokens | previous) >= _DUPLICATE_OVERLAP
+        for previous in seen
+    )
+
+
+def _clip_words(text: str, limit: int) -> str:
+    """Clip to ``limit`` characters at a word boundary (ellipsis when cut)."""
+    text = _collapse(text)
+    if len(text) <= limit:
+        return text
+    head = text[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:–—-")
+    return f"{head}…"
+
+
+def _clip_sentence(text: str, limit: int) -> str:
+    """Clip on the last whole sentence under ``limit``; otherwise on a word."""
+    text = _collapse(text)
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    end = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+    if end >= limit // 2:
+        return window[: end + 1]
+    return _clip_words(text, limit)
+
+
+def _clean_line(text: str) -> str:
+    """Strip list markers, markdown emphasis and wrapping quotes from a hit."""
+    line = _LIST_MARKER.sub("", _collapse(text)).replace("**", "")
+    if len(line) >= 2 and line[0] in _WRAPPING_QUOTES and line[-1] in _WRAPPING_QUOTES:
+        line = line[1:-1].strip()
+    return line
+
+
+def _clip_line(text: str, limit: int) -> str:
+    """A hit is one sentence: keep the first, clip it only if it overflows."""
+    text = _collapse(text)
+    if len(text) <= limit:
+        return text
+    first = _SENTENCE_SPLIT.split(text)[0]
+    if len(first) <= limit:
+        return first
+    return _clip_words(text, limit)
+
+
+def _keep_lines(candidates: list[str]) -> list[str]:
+    """Clean, de-duplicate and clip candidates down to three distinct hits."""
+    kept: list[str] = []
+    seen: list[set[str]] = []
+    for candidate in candidates:
+        line = _clip_line(_clean_line(candidate), _ROAST_LINE_CHARS)
+        tokens = _tokens(line)
+        if not line or _is_repeat(tokens, seen):
+            continue
+        kept.append(line)
+        seen.append(tokens)
+        if len(kept) == _ROAST_LINE_COUNT:
+            break
+    return kept
+
+
+def _normalize(report: RoastReport) -> RoastReport:
+    """Force the report into the shape the verdict screen renders.
+
+    The prompt asks for three 110-character hits, three poison points and
+    short market lines; models drift long. This pass is deterministic, runs
+    on every successful composer call, and is what actually guarantees the
+    page never shows an essay.
+    """
+    lines = list(report.roast_lines)
+    if not any(line.strip() for line in lines):
+        # A model that ignored ``roast_lines`` still gave us prose: salvage it.
+        lines = _SENTENCE_SPLIT.split(report.roast)
+    report.roast_lines = _keep_lines(lines)
+
+    points: list[str] = []
+    seen: list[set[str]] = []
+    for point in report.poison_points:
+        text = _clip_sentence(point, _POISON_POINT_CHARS)
+        tokens = _tokens(text)
+        if not text or _is_repeat(tokens, seen):
+            continue
+        points.append(text)
+        seen.append(tokens)
+        if len(points) == _POISON_POINT_COUNT:
+            break
+    report.poison_points = points
+
+    for market in report.market_analysis:
+        market.analysis = _clip_sentence(market.analysis, _MARKET_ANALYSIS_CHARS)
+        market.missing_signals = [
+            _clip_words(signal, _MISSING_SIGNAL_CHARS)
+            for signal in market.missing_signals[:_MISSING_SIGNAL_COUNT]
+        ]
+
+    report.verdict_summary = _clip_sentence(report.verdict_summary, _SUMMARY_CHARS)
+    report.five_second_impression = _clip_sentence(
+        report.five_second_impression, _IMPRESSION_CHARS
+    )
+    return report
+
+
+def _fallback_roast_lines(aggregated: AggregatedResults) -> list[str]:
+    """Deterministic hits built from the real findings.
+
+    No finding is invented to reach three lines: a sparse report shows fewer
+    hits rather than a fabricated defect.
+    """
+    candidates = [
+        item.text for item in (*aggregated.critical_issues, *aggregated.warnings)
+    ]
+    candidates += [item.text for item in aggregated.suggestions]
+    return _keep_lines(candidates)
+
+
 def _fallback_roast(
     aggregated: AggregatedResults, scoring: ScoringResult
 ) -> RoastReport:
@@ -65,14 +225,9 @@ def _fallback_roast(
     headline = (
         f"A resume that will be filtered, not read — {scoring.overall_score:g}/100."
     )
-    critical_texts = [item.text for item in aggregated.critical_issues[:3]]
-    poison = (
-        critical_texts
-        or [item.text for item in aggregated.warnings[:2]]
-        or [
-            "No fatal findings surfaced — but nothing impressive did either.",
-        ]
-    )
+    poison = [item.text for item in aggregated.critical_issues[:2]] or [
+        item.text for item in aggregated.warnings[:2]
+    ]
     markets = [
         MarketVerdict(
             market="Product Tech & Tier-1",
@@ -85,9 +240,8 @@ def _fallback_roast(
             ),
             analysis=(
                 f"Deterministic checks score {scoring.deterministic_score:g}/100 "
-                "and expert ratings "
-                f"{scoring.ai_score:g}/100 — tier-1 product teams read the gap "
-                "as missing ownership evidence."
+                f"and expert ratings {scoring.ai_score:g}/100 — tier-1 product "
+                "teams read the gap as missing ownership evidence."
             ),
             missing_signals=[item.text for item in aggregated.warnings[:2]],
         ),
@@ -111,8 +265,8 @@ def _fallback_roast(
             else "borderline / screen fail",
             analysis=(
                 "Panels now assume AI-written resumes and trust only "
-                "production metrics (P99/SLIs, eval pass rates, cost or "
-                "token budgets) — none of which the findings surface."
+                "production metrics (P99/SLIs, eval pass rates, cost or token "
+                "budgets) — none of which the findings surface."
             ),
             missing_signals=[
                 "No verifiable system-scale metrics (P99/SLIs, error budgets)",
@@ -121,44 +275,20 @@ def _fallback_roast(
             ],
         ),
     ]
-    roast_body = _fallback_roast_prose(aggregated, scoring)
     return RoastReport(
         headline_verdict=headline,
         verdict_summary=score_line
-        + " The blunt version of the expert review follows — fix the poison "
-        "points before reapplying.",
+        + " The expert findings below are the reason — fix the poison points "
+        "before reapplying.",
         five_second_impression=(
             '"Another generic resume — nothing here proves a human with '
             'ownership wrote it. Pass."'
         ),
         poison_points=poison,
         market_analysis=markets,
-        roast=roast_body,
+        roast_lines=_fallback_roast_lines(aggregated),
+        roast="",
     )
-
-
-def _fallback_roast_prose(aggregated: AggregatedResults, scoring: ScoringResult) -> str:
-    lines = [
-        f"Your resume scores {scoring.overall_score:g}/100 — here is the blunt "
-        "version of the expert review."
-    ]
-    if aggregated.critical_issues:
-        lines.append("The deal-breakers:")
-        lines += [f"- {item.text}" for item in aggregated.critical_issues[:5]]
-    if aggregated.warnings:
-        lines.append("What a reviewer would push back on:")
-        lines += [f"- {item.text}" for item in aggregated.warnings[:5]]
-    if aggregated.suggestions:
-        lines.append("Fix these first:")
-        lines += [f"- {item.text}" for item in aggregated.suggestions[:5]]
-    if aggregated.positive_notes:
-        lines.append("What genuinely works, keep it:")
-        lines += [f"- {note}" for note in aggregated.positive_notes[:5]]
-    lines.append(
-        "(The narrative roast pass was unavailable — this summary is the raw "
-        "expert findings.)"
-    )
-    return "\n".join(lines)
 
 
 async def compose_roast(
@@ -167,7 +297,7 @@ async def compose_roast(
     custom_instructions: str | None = None,
     chain: list[str] | None = None,
 ) -> tuple[RoastReport, bool, AIResult | None]:
-    """Compose the structured reality check + narrative roast.
+    """Compose the structured reality check + the three-hit roast.
 
     Args:
         aggregated: Deduplicated expert findings.
@@ -206,7 +336,12 @@ async def compose_roast(
             raise AIEvaluationError(
                 evaluator="composer", reason="model returned no structured verdict"
             )
+        report = _normalize(report)
+        if not report.roast_lines:
+            raise AIEvaluationError(
+                evaluator="composer", reason="model returned no roast lines"
+            )
         return report, False, result
     except AIEvaluationError:
         logger.warning("Roast composer failed — serving deterministic fallback")
-        return _fallback_roast(aggregated, scoring), True, None
+        return _normalize(_fallback_roast(aggregated, scoring)), True, None

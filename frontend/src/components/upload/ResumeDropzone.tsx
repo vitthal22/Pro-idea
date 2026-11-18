@@ -63,7 +63,7 @@ export function ResumeDropzone({
   return (
     <div
       {...getRootProps()}
-      className={`group cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-all sm:p-8 ${
+      className={`group cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-[border-color,background-color,box-shadow,transform] sm:p-8 xl:py-12 ${
         isDragActive
           ? "border-primary bg-primary/5 shadow-[0_0_40px_-12px] shadow-primary/50"
           : "border-border hover:border-primary/60 hover:bg-card"

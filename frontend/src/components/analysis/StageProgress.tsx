@@ -3,6 +3,8 @@
 import { motion } from "framer-motion";
 import { Check, Flame, Loader2 } from "lucide-react";
 
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 const STAGES = [
   { key: "extracting", label: "Reading your resume" },
   { key: "parsing", label: "Understanding its structure" },
@@ -30,41 +32,41 @@ export function StageProgress({ status }: { status: string }) {
     <div className="relative mx-auto max-w-md">
       {/* Pulsing ember glow behind the card */}
       <div
-        className="bg-glow-ember pointer-events-none absolute -inset-6 animate-pulse"
+        className="bg-glow-ember pointer-events-none absolute -inset-6 animate-pulse motion-reduce:animate-none"
         aria-hidden
       />
       <div className="relative rounded-xl border border-primary/25 bg-card p-6 text-center">
         <motion.span
           className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-primary/15 text-primary"
           animate={{ scale: [1, 1.1, 1] }}
-          transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+          transition={{ repeat: Infinity, duration: 1.6, ease: EASE }}
         >
           <Flame className="size-8" />
         </motion.span>
 
-        <h2 className="mt-4 text-xl font-semibold">Cooking your roast…</h2>
+        <h1 className="mt-4 text-xl font-semibold">Cooking your roast…</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Four experts are reading your resume. This usually takes one to
           three minutes — you can leave this page, your roast will be waiting.
         </p>
 
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
+        <div className="mt-6 h-2 overflow-hidden rounded-full bg-muted">
           <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-primary to-amber-500"
-            initial={{ width: "4%" }}
-            animate={{ width: `${progress}%` }}
-            transition={{ type: "spring", stiffness: 60, damping: 20 }}
+            className="h-full w-full origin-left rounded-full bg-primary"
+            initial={{ scaleX: 0.04 }}
+            animate={{ scaleX: progress / 100 }}
+            transition={{ duration: 0.7, ease: EASE }}
           />
         </div>
 
-        <ol className="mt-5 space-y-1.5 text-left">
+        <ol className="mt-6 space-y-2 text-left">
           {STAGES.map((stage, index) => {
             const done = currentIndex > index;
             const active = currentIndex === index;
             return (
               <li
                 key={stage.key}
-                className={`flex items-center gap-3 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                className={`flex items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors ${
                   active
                     ? "bg-primary/10 font-medium text-primary"
                     : done

@@ -77,13 +77,16 @@ export interface MarketVerdict {
   missing_signals: string[];
 }
 
-/** Structured "Unfiltered Recruiter Reality Check" (composer v2). */
+/** Structured "Unfiltered Recruiter Reality Check" (composer v3). */
 export interface RealityCheck {
   headline_verdict: string;
   verdict_summary: string;
   five_second_impression: string;
   poison_points: string[];
   market_analysis: MarketVerdict[];
+  /** The roast: up to three one-line hits (v3). Absent on v2 reports. */
+  roast_lines?: string[];
+  /** Legacy long-form roast prose — v3 reports leave this empty. */
   roast: string;
 }
 

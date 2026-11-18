@@ -75,8 +75,9 @@ class AnalysisResultPayload(BaseModel):
         description="Job Matcher output (role_based/jd_based modes only)"
     )
     reality_check: dict[str, Any] | None = Field(
-        description="Structured 2026 Hiring Panel verdict (v2 composer) — "
-        "headline, five-second impression, poison points, market analysis"
+        description="Structured 2026 Hiring Panel verdict (v3 composer) — "
+        "headline, three roast lines, five-second impression, poison points, "
+        "market analysis"
     )
     fix_plan: dict[str, Any] | None = Field(
         description="AI before → after rewrites of the top issues (fix "
@@ -85,7 +86,7 @@ class AnalysisResultPayload(BaseModel):
     evaluator_summaries: dict[str, str]
     failed_evaluators: list[str]
     roast_fallback_used: bool = Field(
-        description="True when the narrative roast used the deterministic template"
+        description="True when the roast used the deterministic template"
     )
 
 

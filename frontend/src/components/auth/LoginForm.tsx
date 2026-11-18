@@ -12,7 +12,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,7 +51,7 @@ export function LoginForm() {
 
     try {
       await login.mutateAsync(parsed.data);
-      toast.success("Welcome back!");
+      toast.success("Signed in.");
       router.push("/dashboard");
     } catch (error) {
       setSubmitError(
@@ -66,13 +65,13 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle className="text-2xl">Log in</CardTitle>
+        <h1 className="heading-5">Log in</h1>
         <CardDescription>
           Enter your email and password to continue.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-5" noValidate>
+        <form onSubmit={onSubmit} className="grid gap-6" noValidate>
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
             <Input

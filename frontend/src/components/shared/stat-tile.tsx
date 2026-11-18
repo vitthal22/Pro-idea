@@ -12,7 +12,7 @@ export function StatTile({ icon, label, value, hint }: StatTileProps) {
   return (
     <div className="h-full rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 caption-5 text-muted-foreground">
           {icon}
           {label}
         </span>

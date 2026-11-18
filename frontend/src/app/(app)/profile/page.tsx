@@ -67,7 +67,7 @@ export default function ProfilePage() {
     <div className="w-full max-w-2xl">
       {header}
 
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-6">
         <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <User className="size-6" />
         </div>
@@ -83,14 +83,14 @@ export default function ProfilePage() {
       </div>
 
       <div className="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between gap-4 px-5 py-3">
+        <div className="flex items-center justify-between gap-4 px-6 py-3">
           <div>
             <p className="text-sm font-medium">Appearance</p>
             <p className="text-xs text-muted-foreground">Light or dark theme.</p>
           </div>
           <ThemeToggle />
         </div>
-        <div className="flex items-center justify-between gap-4 px-5 py-3">
+        <div className="flex items-center justify-between gap-4 px-6 py-3">
           <div>
             <p className="text-sm font-medium">Session</p>
             <p className="text-xs text-muted-foreground">

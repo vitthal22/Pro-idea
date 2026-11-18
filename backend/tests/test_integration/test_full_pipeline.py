@@ -97,7 +97,11 @@ async def test_full_pipeline_against_real_ai(
     )
     assert result is not None
     assert result.overall_score is not None and 0 <= result.overall_score <= 100
-    assert result.final_roast and len(result.final_roast.split()) >= 80
+    # v3 contract: the roast is three one-line hits, not a 300-word essay.
+    roast_lines = (result.final_roast or "").splitlines()
+    assert len(roast_lines) == 3
+    assert all(0 < len(line) <= 110 for line in roast_lines)
+    assert sum(len(line.split()) for line in roast_lines) <= 60
     assert result.recruiter_feedback is not None
 
     usage_rows = (

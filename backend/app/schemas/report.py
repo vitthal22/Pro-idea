@@ -4,9 +4,14 @@ These serialize into the JSONB columns of ``analysis_results`` (Phase 3),
 so the field names here are the API contract for the frontend result view.
 """
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# One roast hit: a single sentence the candidate can read in one glance.
+# Empty strings are allowed through validation and dropped by
+# ``app.ai.composer._normalize`` — a blank line must not fail the whole call.
+RoastLine = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
 
 
 class ReportItem(BaseModel):
@@ -121,11 +126,17 @@ class MarketVerdict(BaseModel):
 
 
 class RoastReport(BaseModel):
-    """Structured reality-check produced by the composer (v2).
+    """Structured reality-check produced by the composer (v3).
 
     Stored under ``analysis_results.final_report["reality_check"]`` and
     rendered by the result page's scorecard + "Unfiltered Recruiter
     Reality Check" sections.
+
+    The ceilings here are deliberately looser than the prompt's targets:
+    ``call_ai`` counts a validation failure as a failed attempt and falls
+    back to the deterministic report, so a verbose-but-correct answer must
+    never trip the schema. ``app.ai.composer._normalize`` enforces the
+    targets the UI actually renders.
     """
 
     headline_verdict: str = Field(
@@ -154,8 +165,17 @@ class RoastReport(BaseModel):
         description="Exactly the three markets, in order: Product Tech & "
         "Tier-1, Service & Consulting, 2026 AI-Era Market",
     )
+    roast_lines: list[RoastLine] = Field(
+        default_factory=list,
+        max_length=6,
+        description="The roast: up to three one-line hits, hardest first — "
+        "each one specific defect, no advice and no encouragement",
+    )
     roast: str = Field(
-        description="The narrative roast, 200-350 words of flowing prose"
+        default="",
+        max_length=4000,
+        description="Legacy long-form roast prose (v2). v3 leaves this empty: "
+        "the three roast_lines ARE the roast",
     )
 
 
