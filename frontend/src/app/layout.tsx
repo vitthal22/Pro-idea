@@ -26,10 +26,36 @@ const SITE_TITLE = "Resume Roaster — brutally honest AI resume feedback";
 const SITE_DESCRIPTION =
   "Upload a resume and four specialised AI evaluators score it, rank every weakness, and rewrite the lines that get you screened out.";
 
+const FALLBACK_SITE_URL = "http://localhost:3000";
+
+/**
+ * Canonical origin for metadata URLs (OG image, canonical links).
+ *
+ * An empty value — what hosts pass when a variable is created but left blank —
+ * or one without a scheme crashes `new URL()` while Next collects page
+ * metadata, which fails `next build`. `??` cannot catch either: it only
+ * handles null and undefined.
+ */
+function resolveSiteUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!configured) return FALLBACK_SITE_URL;
+
+  const candidate = /^https?:\/\//i.test(configured)
+    ? configured
+    : `https://${configured}`;
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    console.warn(
+      `[metadata] Ignoring invalid NEXT_PUBLIC_SITE_URL="${configured}" — ` +
+        `using ${FALLBACK_SITE_URL}.`,
+    );
+    return FALLBACK_SITE_URL;
+  }
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  ),
+  metadataBase: new URL(resolveSiteUrl()),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   openGraph: {
