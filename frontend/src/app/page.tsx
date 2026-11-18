@@ -498,14 +498,14 @@ export default function LandingPage() {
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="mx-auto mt-20 max-w-3xl px-4 scroll-mt-24">
-          <motion.div {...reveal()}>
+        <section id="faq" className="mx-auto mt-20 max-w-5xl px-4 scroll-mt-24">
+          <motion.div {...reveal()} className="max-w-3xl">
             <SectionLabel>Questions</SectionLabel>
             <h2 className="mt-2 heading-4 text-balance">
               What people ask before the first roast
             </h2>
           </motion.div>
-          <motion.div {...reveal()} className="mt-6">
+          <motion.div {...reveal()} className="mt-6 max-w-3xl">
             {FAQ.map((item) => (
               <details
                 key={item.question}
@@ -548,7 +548,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-border py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 caption-5 text-muted-foreground sm:flex-row">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-4 caption-5 text-muted-foreground sm:flex-row">
           <span className="flex items-center gap-2">
             <Flame className="size-4 text-primary" aria-hidden />
             Resume Roaster
