@@ -143,6 +143,20 @@ function RoastProse({ text, className }: { text: string; className?: string }) {
   );
 }
 
+/** The roast as a verdict: one line per hit, no paragraphs to wade through. */
+function RoastLines({ lines }: { lines: string[] }) {
+  return (
+    <ul className="space-y-2.5">
+      {lines.map((line, index) => (
+        <li key={index} className="flex gap-3">
+          <span aria-hidden className="mt-3 h-px w-3 shrink-0 bg-primary" />
+          <span className="text-[17px] leading-7 font-medium">{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const EVALUATOR_LABELS: Record<string, string> = {
   ats: "ATS",
   recruiter: "Recruiter",
@@ -723,6 +737,9 @@ export function RoastVerdict({
 }) {
   const check = result.reality_check;
   const roastText = check?.roast ?? result.final_roast;
+  const roastLines = (check?.roast_lines ?? []).filter(
+    (line) => line.trim().length > 0,
+  );
 
   return (
     <article>
@@ -748,7 +765,7 @@ export function RoastVerdict({
 
       <HeroCard result={result} verdict={verdict} />
 
-      {roastText && (
+      {(roastLines.length > 0 || roastText) && (
         <div className="mt-3">
           <Card>
             <p className={`${EYEBROW} flex items-center gap-2 text-primary`}>
@@ -756,7 +773,11 @@ export function RoastVerdict({
               The roast
             </p>
             <div className="mt-3">
-              <RoastProse text={roastText} />
+              {roastLines.length > 0 ? (
+                <RoastLines lines={roastLines} />
+              ) : (
+                roastText && <RoastProse text={roastText} />
+              )}
             </div>
           </Card>
         </div>
