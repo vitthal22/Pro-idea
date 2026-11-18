@@ -23,14 +23,16 @@ const stagger: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.07 } },
 };
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 14 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 32 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } },
 };
 
 function LatestRoastCard({ roast }: { roast: AnalysisListItem }) {
   return (
-    <div className="flex h-full flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/10 via-transparent to-transparent p-4">
+    <div className="flex h-full flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/25 bg-card p-4">
       <div className="flex min-w-0 items-center gap-4">
         {roast.overall_score !== null ? (
           <ScoreRing score={roast.overall_score} size={64} />
@@ -68,7 +70,7 @@ function NewRoastTile() {
   return (
     <Link
       href="/upload"
-      className="group flex h-full items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-4 transition-shadow hover:shadow-[0_0_32px_-8px] hover:shadow-primary/40"
+      className="group flex h-full items-center gap-3 rounded-xl border border-primary/30 bg-card p-4 transition-shadow hover:shadow-[0_0_32px_-8px] hover:shadow-primary/40"
     >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
         <Flame className="size-4" />
@@ -120,18 +122,22 @@ export default function DashboardPage() {
     );
   }
 
-  if (roasts.isError) {
+  if (roasts.isError || resumes.isError) {
+    const loadError = roasts.error ?? resumes.error;
     return (
       <div className="space-y-6">
         {header}
         <ErrorState
           title="Could not load your overview"
           description={
-            roasts.error instanceof Error
-              ? roasts.error.message
+            loadError instanceof Error
+              ? loadError.message
               : "An unexpected error occurred."
           }
-          onRetry={() => roasts.refetch()}
+          onRetry={() => {
+            roasts.refetch();
+            resumes.refetch();
+          }}
         />
       </div>
     );
@@ -153,13 +159,16 @@ export default function DashboardPage() {
 
   if (roastTotal === 0 && resumeTotal === 0) {
     return (
-      <EmptyState
-        icon={Flame}
-        title="Welcome to the roaster"
-        description="Upload your resume and four AI experts will tear it apart — honestly, constructively, and in about two minutes."
-        actionLabel="Upload your first resume"
-        actionHref="/upload"
-      />
+      <div className="space-y-6">
+        {header}
+        <EmptyState
+          icon={Flame}
+          title="Welcome to the roaster"
+          description="Upload your resume and four AI experts will tear it apart — honestly, constructively, and in about two minutes."
+          actionLabel="Upload your first resume"
+          actionHref="/upload"
+        />
+      </div>
     );
   }
 

@@ -71,6 +71,7 @@ export default function AnalysisPage({
   if (isPending) {
     return (
       <div className="space-y-4">
+        <h1 className="sr-only">Resume analysis</h1>
         <Skeleton className="h-28 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-2xl" />
@@ -80,15 +81,18 @@ export default function AnalysisPage({
 
   if (isError || !data) {
     return (
-      <ErrorState
-        title="Could not load this analysis"
-        description={
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred."
-        }
-        onRetry={() => refetch()}
-      />
+      <div className="space-y-4">
+        <h1 className="sr-only">Resume analysis</h1>
+        <ErrorState
+          title="Could not load this analysis"
+          description={
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred."
+          }
+          onRetry={() => refetch()}
+        />
+      </div>
     );
   }
 
@@ -98,9 +102,9 @@ export default function AnalysisPage({
 
       {!running && (data.status === "failed" || data.status === "partial") && (
         <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 text-center">
-          <h2 className="text-xl font-semibold">
+          <h1 className="text-xl font-semibold">
             {data.status === "failed" ? "The roast burned" : "The roast didn't finish"}
-          </h2>
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {data.status === "failed"
               ? (data.error_message ?? "The pipeline failed unexpectedly.")

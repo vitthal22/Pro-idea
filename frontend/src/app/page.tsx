@@ -246,7 +246,7 @@ export default function LandingPage() {
       />
       <LandingNavbar />
 
-      <main className="flex-1 overflow-x-clip">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-x-clip outline-none">
         {/* Hero */}
         <section className="relative px-4 pt-10 pb-10 text-center">
           <div

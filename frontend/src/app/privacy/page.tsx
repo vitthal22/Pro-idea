@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-12">
+    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-2xl px-4 py-12 outline-none">
       <Link
         href="/"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"

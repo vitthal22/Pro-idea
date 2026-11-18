@@ -222,7 +222,7 @@ function ScoreDial({
                 fill="none"
                 strokeWidth={stroke}
                 strokeLinecap="butt"
-                className={`transition-[stroke] duration-150 ${
+                className={`transition-[stroke] duration-300 ${
                   isActive ? "stroke-black" : "stroke-muted/50"
                 }`}
                 strokeDasharray={`${arc} ${circumference}`}
@@ -239,7 +239,7 @@ function ScoreDial({
                   r={radius}
                   fill="none"
                   strokeLinecap="butt"
-                  className={`pointer-events-none transition-opacity duration-150 ${metricTone.text}`}
+                  className={`pointer-events-none transition-opacity duration-300 ${metricTone.text}`}
                   stroke="currentColor"
                   style={{
                     opacity: dimmed ? 0.22 : 1,
@@ -291,7 +291,7 @@ function ScoreDial({
                 /100
               </span>
             </p>
-            <p className="mt-1.5 text-[10px] leading-[1.4] text-muted-foreground">
+            <p className="mt-2 text-[10px] leading-[1.4] text-muted-foreground">
               {activeMetric.meaning}
             </p>
             {activeMetric.weight !== null && (
@@ -416,7 +416,7 @@ function HeroCard({
   ];
 
   return (
-    <Card className="mt-5 border-primary/25 bg-primary/[0.03] p-6">
+    <Card className="mt-6 border-primary/25 bg-primary/[0.03] p-6">
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="flex flex-col items-center">
           <ScoreDial
@@ -461,7 +461,7 @@ function HeroCard({
                   >
                     {metric.value ?? "—"}
                   </dd>
-                  <div className="mt-1.5 h-0.5 w-full bg-muted">
+                  <div className="mt-2 h-0.5 w-full bg-muted">
                     {metric.value !== null && metricTone && (
                       <div
                         className={`h-0.5 ${metricTone.bar}`}
@@ -556,7 +556,7 @@ function MarketCard({ market }: { market: MarketVerdict }) {
           {market.missing_signals.map((signal) => (
             <li
               key={signal}
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+              className="rounded border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground"
             >
               {signal}
             </li>
@@ -651,7 +651,7 @@ function WorksCard({ notes }: { notes: string[] }) {
   return (
     <Card className="p-4">
       <h3 className="text-sm font-semibold">What works</h3>
-      <ul className="mt-2 space-y-1.5">
+      <ul className="mt-2 space-y-2">
         {notes.map((note, index) => (
           <li key={index} className="flex gap-2 text-sm leading-6">
             <Check className="mt-1 size-4 shrink-0 text-pass" />
@@ -672,7 +672,7 @@ function ChecksCard({ result }: { result: AnalysisResultPayload }) {
       <h3 className="text-sm font-semibold">Checks</h3>
       <dl className="mt-2 divide-y divide-border">
         {checks.map((check) => (
-          <div key={check.name} className="flex items-start justify-between gap-3 py-1.5">
+          <div key={check.name} className="flex items-start justify-between gap-3 py-2">
             <dt className="text-xs text-muted-foreground">
               <span className="capitalize">{check.name.replace(/_/g, " ")}</span>
             </dt>
@@ -732,7 +732,7 @@ export function RoastVerdict({
             Roast · {analysisModeLabel(analysisType)}
           </p>
           <div className="flex shrink-0 items-center gap-2">
-            <Button asChild size="sm" className="gap-1.5">
+            <Button asChild size="sm" className="gap-2">
               <Link href={`/analysis/${analysisId}/report`}>
                 View full report
                 <ArrowRight className="size-3.5" />
@@ -881,7 +881,7 @@ export function RoastReport({
         <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
           <Link
             href={`/analysis/${analysisId}`}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" aria-hidden />
             Back to verdict
@@ -905,8 +905,7 @@ export function RoastReport({
           {check?.headline_verdict ?? "Roast report"}
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Full report · {analysisModeLabel(analysisType)} · benchmark: senior
-          engineering cohort, 2026 market
+          Full report · {analysisModeLabel(analysisType)}
         </p>
         {check?.verdict_summary && (
           <p className="mt-3 max-w-[80ch] text-[15px] leading-7 text-muted-foreground">

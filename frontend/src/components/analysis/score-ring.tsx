@@ -2,6 +2,9 @@
 
 import { motion } from "framer-motion";
 
+/** Weighted, decelerating curve shared by every motion in the app. */
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 function scoreTone(score: number): string {
   if (score >= 70) return "text-primary";
   // amber-700 keeps mid scores readable on the light card (yellow-500 is
@@ -47,7 +50,7 @@ export function ScoreRing({ score, size = 72 }: { score: number; size?: number }
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: circumference * (1 - clamped / 100) }}
-          transition={{ duration: 1.1, ease: "easeOut" }}
+          transition={{ duration: 0.7, ease: EASE }}
         />
       </svg>
       <span

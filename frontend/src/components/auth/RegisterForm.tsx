@@ -12,7 +12,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,7 +78,7 @@ export function RegisterForm() {
         email: parsed.data.email,
         password: parsed.data.password,
       });
-      toast.success("Account created. Welcome!");
+      toast.success("Account created.");
       router.push("/dashboard");
     } catch (error) {
       setSubmitError(
@@ -120,7 +119,7 @@ export function RegisterForm() {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <h1 className="heading-5">Create an account</h1>
         <CardDescription>
           Sign up to start roasting your resume.
         </CardDescription>
