@@ -140,7 +140,6 @@
 | Rate limiting (M1.6) | Needs Redis for meaningful limits | Install Docker (or point `REDIS_URL` at any Redis) |
 | OCR fallback (M2.4) | pytesseract + pdf2image + Tesseract/Poppler are V2 deps and not installed | Add deps + binaries, then implement `document_processing/ocr.py` |
 | Render deploy — `libmagic` in the base image | Unverified from Windows: `python-magic` (now declared for non-Windows) needs the OS `libmagic1`. Render's native Python runtime normally has it, but that cannot be checked from here; if it is missing the service dies at import with `failed to find libmagic` | Deploy once and read the log. If it fails: add a `Dockerfile` (`FROM python:3.11-slim`, `apt-get install -y libmagic1`) and switch the service to Docker |
-| Reproducible Python builds | `poetry.lock` is gitignored (`.gitignore:16`, `poetry.lock`) while `package-lock.json` is tracked, so a clean clone — and the Render build, which has no lock — resolves every range fresh instead of using the pinned 108-package graph | Remove that line from `.gitignore` and commit the lock (`poetry check --lock` already reports All set) |
 | Live frontend↔backend auth test | Nothing blocking — both run locally | Run backend + frontend (commands below), register via UI |
 
 ---

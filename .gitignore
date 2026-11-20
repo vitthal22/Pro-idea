@@ -12,8 +12,7 @@ build/
 venv/
 env/
 
-# Poetry
-poetry.lock
+# Poetry (poetry.lock is committed on purpose - deploys must be reproducible)
 
 # Node
 node_modules/
